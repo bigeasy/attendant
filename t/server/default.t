@@ -6,4 +6,4 @@ echo "1..2"
 
 result=$(echo " " | t/bin/server)
 ok "server exited normally"
-[ -z "$result" ]; ok "server state clean"
+[ $result == "RUNNING" ]; ok "server state clean"

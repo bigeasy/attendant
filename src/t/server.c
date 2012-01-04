@@ -7,12 +7,6 @@
 #include <errno.h>
 #include <string.h>
 
-/* Initially, this setup was going to take place in the attendant library linked
- * to the host application, after fork and before execve, but the whole thing
- * felt like a race condition. There are a lot of issues to consider in the
- * worst cases, 
- */
-
 /* True if a file handle is open. */
 int is_open(int fd) {
   return fcntl(fd, F_GETFL) != -1 || errno != EBADF;
@@ -38,7 +32,8 @@ int main() {
   for (signum = SIGHUP; signum < NSIG; signum++) {
     sigaction(signum, NULL, &sig);
     if (sig.sa_handler != SIG_DFL) {
-      printf("SIGNAL: %s.\n", strsignal(signum));
+      printf("SIGNAL %d: %s.\n", signum, strsignal(signum));
+      fflush(stdout);
     }
   }
 
@@ -61,8 +56,11 @@ int main() {
   if (! is_open(STDOUT_FILENO)) printf("CLOSED: STDOUT");
   if (! is_open(STDERR_FILENO)) printf("CLOSED: STDERR");
 
+  printf("RUNNING\n");
+  fflush(stdout);
+
   /* Termiante on any input. */
-  getchar();
+  putchar(getchar());
 
   /* Always successful, even if things weren't as expected, we did our job in
    * reporting the state. If it is wrong, that is someone else's failure. */
