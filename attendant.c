@@ -1601,7 +1601,7 @@ static int scram() {
      */
     HANDLE_EINTR(write(process.pipes[PIPE_INSTANCE][1], scram, sizeof(scram)), err);
 
-    trace("scram", "success");
+    trace("scram", "initiated");
 
     return 1;
   }

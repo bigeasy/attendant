@@ -21,6 +21,13 @@ static char * expected[] = {
   "[reap/shutdown]",
   "[launch/poll]",
   "[shutdown/exit]",
+  "[done/exit]", 
+  "[shutdown/exit]",
+  "[scram/initiated]",
+  "[reap/shutdown]",
+  "[launch/poll]",
+  "[reap/instance]",
+  "[launch/poll]",
   "[reap/hangup]",
   "[reap/hungup]",
   "[done/exit]",
@@ -52,21 +59,21 @@ void trace_ok(char **trace, char **expected, char *message) {
 }
 
 int main() {
-  int err;
-  char path[PATH_MAX], **trace, ch = '\n';
+  char path[PATH_MAX], **trace;
   char const * argv[] = { NULL };
 
-  printf("1..2\n");
+  printf("1..3\n");
 
   attendant.initialize(strcat(getcwd(path, PATH_MAX), "/relay"), 31);  
   attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/server"), argv, abend);
   attendant.ready();
   attendant.shutdown();
-  HANDLE_EINTR(write(attendant.stdio(0), &ch, sizeof(ch)), err);
-  ok(attendant.done(30000), "done");
+  ok(! attendant.done(250), "can't exit");
+  attendant.scram();
+  ok(attendant.done(-1), "done");
 
   trace = attendant.tracepoints();
-  trace_ok(trace, expected, "cycle");
+  trace_ok(trace, expected, "scram");
 
   attendant.destroy();  
 
