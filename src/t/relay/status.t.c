@@ -6,26 +6,7 @@
 #include <limits.h>
 #include <unistd.h>
 
-void ok(int cond, char const *message) {
-  char const *not = cond ? "" : "not ";
-  printf("%sok %s\n", not, message);
-}
-
-void bail() {
-  printf("Bail Out! %s\n", strerror(errno));
-  exit(EXIT_FAILURE);
-}
-
-#define CHECK(op, cond)       \
-  do {                        \
-    (op);                     \
-    if (cond) {               \
-      if (errno == EINTR) {   \
-        continue;             \
-      }                       \
-      bail();                 \
-    }                         \
-  } while (0)
+#include "../ok.h"
 
 int send_status_pipe() {
   int pipein[2], pipeout[2], pipestat[2], spipe, err;
@@ -55,8 +36,8 @@ int send_status_pipe() {
     CHECK(err = close(pipein[0]), err == -1);
     CHECK(err = close(pipeout[1]), err == -1);
 
-    execl("relay", "relay", number, path, (char*) 0);
-    bail();
+    execl("relay", "relay", number, "1", path, "a", "b", "c", (char*) 0);
+    bail(strerror(errno));
   default:
     CHECK(err = read(pipeout[0], &spipe, sizeof(spipe)), err == -1);
     ok(spipe == pipestat[1], "relay sends pipe number via stdout"); 
@@ -103,8 +84,8 @@ int fail_status_pipe() {
     CHECK(err = close(pipein[0]), err == -1);
     CHECK(err = close(pipeout[1]), err == -1);
 
-    execl("relay", "relay", "X", path, (char*) 0);
-    bail();
+    execl("relay", "relay", "X", "1", path, (char*) 0);
+    bail(strerror(errno));
   default:
     close(pipeout[1]);
     CHECK(err = read(pipeout[0], &spipe, sizeof(spipe)), err == -1);

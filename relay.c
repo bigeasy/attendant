@@ -33,7 +33,7 @@
  * error code, it knows that the relay program is done and the server program
  * has exec'd, so it knows that there were no errors in the relay program.
  */
-static int spipe;
+static int spipe, pulse_pipe;
 
 /* True if a file handle is a stdio file handle. */
 int is_stdio(int fd) {
@@ -91,7 +91,7 @@ void set_close_on_exec() {
   } else {
     while ((ent = readdir(dir)) != NULL) {
       fd = atoi(ent->d_name);
-      if (! is_stdio(fd) && fd != dirfd(dir)) {
+      if (! is_stdio(fd) && fd != dirfd(dir) && fd != pulse_pipe) {
         fcntl(fd, F_SETFD, FD_CLOEXEC);
       }
     }
@@ -163,8 +163,20 @@ void get_status_pipe(int argc, char *argv[]) {
   if (err == -1) {
     exit(127);
   }
-  /* Now we know that error reporting will work correctly, so check that we haev
+  /* Now we know that error reporting will work correctly, so check that we have
    * a program to run specified by an absolute path before we go one. */
+}
+
+void get_pulse_pipe(int argc, char *argv[]) {
+  char *end;
+  int err;
+  if (argc < 3) {
+    send_error(spipe, RELAY_PULSE_PIPE_MISSING);
+  }
+  pulse_pipe = atoi(argv[2]);
+  if (pulse_pipe == 0) {
+    send_error(spipe, RELAY_PULSE_PIPE_MALFORMED);
+  }
 }
 
 /* We check to see that we received a program name and that the path is
@@ -172,28 +184,29 @@ void get_status_pipe(int argc, char *argv[]) {
  * executable on the filesystem.
  */
 void verify_arguments(int argc, char *argv[]) {
-  if (argc < 3) {
+  if (argc < 4) {
     send_error(spipe, RELAY_PROGRAM_MISSING);
   }
-  if (argv[2][0] != '/') {
+  if (argv[3][0] != '/') {
     send_error(spipe, RELAY_PROGRAM_PATH_NOT_ABSOLUTE);
   }
 }
 
 void execute(int argc, char *argv[]) {
   char *args[ARG_MAX];
-  char *path = argv[2];
+  char *path = argv[3];
   int i;
 
   args[0] = path;
-  for (i = 0; i < argc - 3; i++) {
-    args[i + 1] = argv[i + 3];
+  for (i = 0; i < argc - 4; i++) {
+    args[i + 1] = argv[i + 4];
   }
-  args[argc - 1] = NULL;
+  args[argc - 3] = NULL;
+
   /*
-  fprintf(stderr, "XX %s\n", path);
+  fprintf(stderr, "path %s\n", path);
   for (i = 0; args[i]; i++) {
-    fprintf(stderr, "YY %s\n", args[i]);
+    fprintf(stderr, "arg %s\n", args[i]);
   }
   */
 
@@ -206,9 +219,14 @@ void execute(int argc, char *argv[]) {
 
 /* Perform the cleaning operations and execve the server process. */
 int main(int argc, char *argv[]) {
+  /* Get the first argument, the status pipe, where we report any errors. */
   get_status_pipe(argc, argv);
 
-  /* Check that the arguments are as expected. */
+  /* Get the second, the pulse pipe that we're not supposed to close. */
+  get_pulse_pipe(argc, argv);
+
+  /* Check that the third argument is a relay program. The remainder of the
+   * arguments are arguments for the relay program. */
   verify_arguments(argc, argv);
 
   /* Reset signals. */

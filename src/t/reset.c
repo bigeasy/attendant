@@ -36,7 +36,7 @@ int check_reset(const char *message) {
     CHECK(err = close(pipein[0]), err == -1);
     CHECK(err = close(pipeout[1]), err == -1);
 
-    execl("relay", "relay", number, path, (char*) 0);
+    execl("relay", "relay", number, "1", path, (char*) 0);
     bail(strerror(errno));
   default:
     CHECK(err = read(pipeout[0], &spipe, sizeof(spipe)), err == -1);

@@ -1,6 +1,6 @@
-/* With signal handlers in place, system calls are subject to interrupt. We need
- * to check all system calls for interrupts. This macro makes that less onerous.
- * None of the pthreads functions have the EINTR problem.
+/* Many system calls are subject to interrupt when signal handlers are in place.
+ * This macro makes that less onerous. None of the pthreads functions have the
+ * `EINTR` problem.
  */
 #define HANDLE_EINTR(call, err)         \
 do {                                    \
