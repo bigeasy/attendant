@@ -300,7 +300,15 @@ static struct process_t process;
 /* &mdash; */
 #define PIPE_RELAY   4
 
-/* The reaper thread will poll the canary pipe below, listening for the library
+/* The reaper thread will listen to the canary pipe, the other end is held by
+ * the running child server process. When the pipe closes and we get an `EPIPE`
+ * error, it means the plugin server process has exited. This is how we monitor
+ * the child server process without relying on `waitpid` being functional. */
+
+/* &mdash; */
+#define PIPE_CANARY   5
+
+/* The reaper thread will poll the canary pipe above, listening for the library
  * server process exit. At the same time it will poll this instance pipe, which
  * is used by the plugin stub to wake the reaper thread and tell it to forcibly
  * retart the plugin server process. The plugin server process may have become
@@ -309,15 +317,7 @@ static struct process_t process;
  */
 
 /* &mdash; */
-#define PIPE_INSTANCE   5
-
-/* The reaper thread will listen to the canary pipe, the other end is held by
- * the running child server process. When the pipe closes and we get an `EPIPE`
- * error, it means the plugin server process has exited. This is how we monitor
- * the child server process without relying on `waitpid` being functional. */
-
-/* &mdash; */
-#define PIPE_CANARY   6
+#define PIPE_REAPER   6
 
 /* `stdio` &mdash; The standard I/O pipes do not change during the life time of
  * the plugin attendant. They are preserved across restarts by duping the parent
@@ -359,6 +359,8 @@ void trace(const char* function, const char* point) {
   (void) pthread_mutex_lock(&process.trace.mutex);
   if (process.trace.count < (sizeof(buffer) / sizeof(char)) - 1) {
     sprintf(buffer, "[%s/%s]", function, point);
+    /* At times, I'll insert a `fprintf(stderr, "%s\n", buffer);` right here to see
+     * what's happening as it happens. */
     process.trace.points[process.trace.count++] = strdup(buffer);
   }
   (void) pthread_mutex_unlock(&process.trace.mutex);
@@ -425,7 +427,7 @@ static int initalize(const char *relay, int canary)
   process.relay = strdup(relay);
 
   /* Initialize the pipes to -1, so we know that they are not open. */
-  for (i = PIPE_STDIN; i <= PIPE_CANARY; i++) {
+  for (i = PIPE_STDIN; i <= PIPE_REAPER; i++) {
     process.pipes[i][0] = process.pipes[i][1] = -1;
   }
 
@@ -511,6 +513,15 @@ static int initalize(const char *relay, int canary)
   close_pipe(PIPE_STDOUT, 1);
   close_pipe(PIPE_STDERR, 1);
 
+  /* Create the instance pipe, which will remain open until the plugin attendant
+   * is destroyed. */
+  err = pipe(process.pipes[PIPE_REAPER]);
+  FAIL(err == -1, INITIALIZE_CANNOT_CREATE_REAPER_PIPE, fail);
+
+  /* No child process should inherit the instance pipe. */
+  fcntl(process.pipes[PIPE_REAPER][0], F_SETFD, FD_CLOEXEC);
+  fcntl(process.pipes[PIPE_REAPER][1], F_SETFD, FD_CLOEXEC);
+
   /* Initialize tracing mutex. */
 #ifdef _DEBUG
   (void) pthread_mutex_init(&process.trace.mutex, NULL);
@@ -531,6 +542,9 @@ fail:
 
   close_pipe(PIPE_STDERR, 0);
   close_pipe(PIPE_STDERR, 1);
+
+  close_pipe(PIPE_REAPER, 0);
+  close_pipe(PIPE_REAPER, 1);
 
   return -1;
 /* &mdash; */
@@ -614,9 +628,11 @@ static void free_argv() {
   }
 }
 
-/* Close all open pipes, except for the plugin stub side of the stdio pipes. We
- * keep the same file descriptor for the plugin stub side of stdio between
- * restarts, so that the plugin stub can cache the file descriptors.
+/* Close all open pipes, except for the instance pipe and the plugin stub side
+ * of the stdio pipes. The reaper pipe is never shared with children and lives
+ * for the life of the plugin attendant. We keep the same file descriptor for
+ * the plugin stub side of stdio between restarts, so that the plugin stub can
+ * cache the file descriptors.
  */
 static void close_pipes() {
   int pipeno;
@@ -794,10 +810,9 @@ static void *launch(void *data)
     fcntl(process.pipes[i][0], F_SETFD, FD_CLOEXEC);
   }
 
-  /* The write ends of the STDIN, FORK and INSTANCE pipes are close on exit. */
+  /* The write ends of the STDIN and FORK pipes are close on exit. */
   fcntl(process.pipes[PIPE_STDIN][1], F_SETFD, FD_CLOEXEC);
   fcntl(process.pipes[PIPE_FORK][1], F_SETFD, FD_CLOEXEC);
-  fcntl(process.pipes[PIPE_INSTANCE][1], F_SETFD, FD_CLOEXEC);
 
   /* Make the first argument to relay the string value of the status pipe. */
   spipe = process.pipes[PIPE_RELAY][1];
@@ -852,8 +867,9 @@ static void *launch(void *data)
    * housekeeping, or there is resource limit on the number of processes. */
   FAIL(process.pid == -1, LAUNCH_CANNOT_FORK, fail);
 
-  /* Close the child end of all of our pipes, except for the INSTANCE pipe,
-   * since both ends of that pipe are in the parent. */
+  /* Close the child end of all of the pipes we've just created. We do not close
+   * the reaper pipe, of course, because it lasts for the life time of the
+   * plugin attendant. */
   close_pipe(PIPE_STDIN, 0);
   close_pipe(PIPE_STDOUT, 1);
   close_pipe(PIPE_STDERR, 1);
@@ -967,6 +983,8 @@ static void *launch(void *data)
 
 fail:
 
+  trace("launch", "failure");
+
   if (process.pid > 0) {
     /* There is no logic in the relay that doesn't exit immediately. If it is
      * hung and a `SIGKILL` is necessary, then plugin attendant is broken. */
@@ -1007,7 +1025,7 @@ fail:
 /* &#9824; */
 static void* reap(void *data)
 {
-  static int INSTANCE = 0, PULSE = 1, input[2], instance = 0,
+  static int REAPER = 0, CANARY = 1, input[2], instance = 0,
     sig = SIGTERM, timeout = -1, hangup = 0, shutdown = 0;
   int status, err;
   struct pollfd channels[2];
@@ -1039,8 +1057,8 @@ static void* reap(void *data)
      * on the canary pipe. When it closes, we know not to restart the server. */
 
     /* Poll the instance and canary pipes. */
-    channels[INSTANCE].events = POLLIN;
-    channels[INSTANCE].revents = 0;
+    channels[REAPER].events = POLLIN;
+    channels[REAPER].revents = 0;
 
     /* Might be visiting this twice, due to SIGTERM, then getting a new instance
      * number. Ah, but the instance number can't be greater than the current
@@ -1049,13 +1067,13 @@ static void* reap(void *data)
      */
 
     /* */
-    channels[PULSE].events = POLLHUP;
-    channels[PULSE].revents = 0;
+    channels[CANARY].events = POLLHUP;
+    channels[CANARY].revents = 0;
 
-    channels[INSTANCE].fd = process.pipes[PIPE_INSTANCE][0];
-    channels[PULSE].fd = process.pipes[PIPE_CANARY][0];
+    channels[REAPER].fd = process.pipes[PIPE_REAPER][0];
+    channels[CANARY].fd = process.pipes[PIPE_CANARY][0];
 
-    trace("launch", "poll");
+    trace("reap", "poll");
 
     HANDLE_EINTR(poll(channels, 2, timeout), err);
 
@@ -1063,9 +1081,9 @@ static void* reap(void *data)
      * with the process monitoring pipes, we go to the shutdown state. */
 
     /* Did the monitored process terminate? */
-    if (channels[PULSE].revents != 0) {
+    if (channels[CANARY].revents != 0) {
       trace("reap", "hangup");
-      if (channels[PULSE].revents == POLLHUP) {
+      if (channels[CANARY].revents == POLLHUP) {
         hangup = 1;
       } else {
         set_error(REAPER_UNEXPECTED_CANARY_PIPE_EVENT);
@@ -1073,17 +1091,17 @@ static void* reap(void *data)
     }
 
     /* Did we get an instance number from the plugin stub? */
-    if (channels[INSTANCE].revents != 0) {
-      if (channels[INSTANCE].revents == POLLIN) {
+    if (channels[REAPER].revents != 0) {
+      if (channels[REAPER].revents == POLLIN) {
         /* Read the message from the user. */
-        HANDLE_EINTR(read(process.pipes[PIPE_INSTANCE][0], input, sizeof(input)), err);
+        HANDLE_EINTR(read(process.pipes[PIPE_REAPER][0], input, sizeof(input)), err);
 
         if (err != sizeof(input)) {
           /* Any error reading the instance pipe means we shutdown for good. */
           if (err == -1) {
-            set_error(REAPER_CANNOT_READ_INSTANCE_PIPE);
+            set_error(REAPER_CANNOT_READ_REAPER_PIPE);
           } else {
-            set_error(REAPER_TRUNCATED_READ_INSTANCE_PIPE);
+            set_error(REAPER_TRUNCATED_READ_REAPER_PIPE);
           }
 
         } else if (input[0] == -1) {
@@ -1097,7 +1115,7 @@ static void* reap(void *data)
           /* */
         }
       } else {
-        set_error(REAPER_UNEXPECTED_INSTANCE_PIPE_EVENT);
+        set_error(REAPER_UNEXPECTED_REAPER_PIPE_EVENT);
       }
     }
 
@@ -1442,7 +1460,7 @@ static int retry(int milliseconds) {
   if (terminate) {
     message[0] = *instance;
     message[1] = milliseconds;
-    HANDLE_EINTR(write(process.pipes[PIPE_INSTANCE][1], message, sizeof(message)), err); 
+    HANDLE_EINTR(write(process.pipes[PIPE_REAPER][1], message, sizeof(message)), err); 
   }
 
   /* Wait for the server to be ready again. */
@@ -1514,19 +1532,19 @@ static int shutdown() {
 
   /* Tell the reaper thread that shutdown has come. It will not attempt to
    * restart the library server process the next time it exits. */
-  HANDLE_EINTR(write(process.pipes[PIPE_INSTANCE][1], shutdown, sizeof(shutdown)), err);
+  HANDLE_EINTR(write(process.pipes[PIPE_REAPER][1], shutdown, sizeof(shutdown)), err);
 
   /* Dip into our mutex to check and see we're not in the middle of a server
    * restart. If we are in the middle of a server restart, we may as well wait
    * for it to finish before we continue. */
   (void) pthread_mutex_lock(&process.mutex);
-  if (process.restarting) {
+  while (process.restarting) {
     (void) pthread_cond_wait(&process.cond.running, &process.mutex);
   }
 
   /* Wait for the shutdown flag to set, otherwise a call to done is going to
    * report an invalid state. */
-  if (! process.shutdown) {
+  while (! process.shutdown) {
     (void) pthread_cond_wait(&process.cond.shutdown, &process.mutex);
   }
 
@@ -1599,7 +1617,7 @@ static int scram() {
      *
      * We'll try a SIGTERM term first, as usual, then a SIGKILL.
      */
-    HANDLE_EINTR(write(process.pipes[PIPE_INSTANCE][1], scram, sizeof(scram)), err);
+    HANDLE_EINTR(write(process.pipes[PIPE_REAPER][1], scram, sizeof(scram)), err);
 
     trace("scram", "initiated");
 
@@ -1639,6 +1657,10 @@ static int destroy() {
   close(process.pipes[PIPE_STDIN][1]);
   close(process.pipes[PIPE_STDOUT][0]);
   close(process.pipes[PIPE_STDERR][0]);
+
+  /* Release the reaper pipe. */
+  close(process.pipes[PIPE_REAPER][0]);
+  close(process.pipes[PIPE_REAPER][1]);
 
   /* Release the trace points, if any. */
 #ifdef _DEBUG
