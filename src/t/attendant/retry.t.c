@@ -1,7 +1,6 @@
 #include <limits.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,16 +15,6 @@ void abend() {
   char path[PATH_MAX];
   char const * argv[] = { NULL };
   attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/when"), argv, abend);
-}
-
-/* Report ok with a formatted message. */
-int okay(int condition, const char* format, ...) {
-  char buffer[4096];
-  va_list args;
-  va_start(args,format);
-  vsnprintf(buffer, sizeof(buffer), format, args);
-  va_end(args);
-  ok(condition, buffer);
 }
 
 struct retry {
@@ -43,21 +32,21 @@ static void* retry(void *data) {
 
   /* Ping the plugin server process to get its start time. */
   HANDLE_EINTR(write(attendant.stdio(0), ping, strlen(ping)), err);
-  okay(err != -1, "write ping of %s thread", name);
+  ok(err != -1, "write ping of %s thread", name);
   memset(first, 0, sizeof(first));
   HANDLE_EINTR(read(attendant.stdio(1), first, sizeof(first)), err);
-  okay(err != -1, "read ping of %s thread", name);
+  ok(err != -1, "read ping of %s thread", name);
 
   /* Ping the plugin server process to get its start time again. */
   HANDLE_EINTR(write(attendant.stdio(0), ping, strlen(ping)), err);
-  okay(err != -1, "write confirm ping of %s thread", name);
+  ok(err != -1, "write confirm ping of %s thread", name);
   memset(second, 0, sizeof(second));
   HANDLE_EINTR(read(attendant.stdio(1), second, sizeof(second)), err);
-  okay(err != -1, "read confirm ping of %s thread", name);
+  ok(err != -1, "read confirm ping of %s thread", name);
 
   /* Sanity check to ensure that the server process correctly reports the same
    * start time when it runs uninterrupted. */
-  okay(strcmp(first, second) == 0, "running from %s thread", name);
+  ok(strcmp(first, second) == 0, "running from %s thread", name);
 
   /* Tell the server to close stdandard out. */
   HANDLE_EINTR(write(attendant.stdio(0), close, strlen(close)), err);
@@ -94,8 +83,8 @@ static void* retry(void *data) {
   }
 
   /* By now we should have restarted. */
-  okay(strcmp(first, second) != 0, "restarted from %s thread", name);
-  okay(count == retry->count, "retry count correct in %s thread", name);
+  ok(strcmp(first, second) != 0, "restarted from %s thread", name);
+  ok(count == retry->count, "retry count correct in %s thread", name);
 }
 
 /* Run the above test twice, in two separate threads. The second run ought to

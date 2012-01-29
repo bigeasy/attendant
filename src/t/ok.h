@@ -9,5 +9,5 @@
     }                         \
   } while (0)
 
-void ok(int cond, char const *message);
+void ok(int cond, char const *format, ...);
 void bail(const char* message);
