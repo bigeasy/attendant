@@ -1,0 +1,17 @@
+#!/bin/bash
+
+when=$(date)
+while read line
+do
+    case "$line" in
+        exit)
+            break
+            ;;
+        close)
+            exec 1>&-
+            ;;
+        ping)
+            echo $when 
+            ;;
+    esac
+done

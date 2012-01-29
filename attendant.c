@@ -237,8 +237,6 @@ struct process_t {
   int last_errno;
   /* Thread local storage key for thread local storage of instance count. */
   pthread_key_t key;          
-  /* Once key for one time initializatin of thread local storage of instance count. */
-  pthread_once_t onceler;     
   /* Gaurd process variables referenced by both the stub functions running in
    * the plugin threads and the server process management threads. */
   pthread_mutex_t mutex;      
@@ -359,8 +357,9 @@ void trace(const char* function, const char* point) {
   (void) pthread_mutex_lock(&process.trace.mutex);
   if (process.trace.count < (sizeof(buffer) / sizeof(char)) - 1) {
     sprintf(buffer, "[%s/%s]", function, point);
-    /* At times, I'll insert a `fprintf(stderr, "%s\n", buffer);` right here to see
-     * what's happening as it happens. */
+    /* At times, I'll insert a `fprintf(stderr, "%s\n", buffer);` right here to
+     * see what's happening as it happens.
+     */
     process.trace.points[process.trace.count++] = strdup(buffer);
   }
   (void) pthread_mutex_unlock(&process.trace.mutex);
@@ -465,6 +464,9 @@ static int initalize(const char *relay, int canary)
 
   (void) pthread_condattr_destroy (&attr);
 
+  /* Initialize the thread local storage key used to track the instance count
+   * when a plugin stub threads invokes `retry`. */
+  (void) pthread_key_create(&process.key, free);
 
   /* If the state of SIGCHLD is SIG_IGN the host application wants the kernel to
    * take care of zombies, and waitpid is usless for our purposes.
@@ -708,6 +710,7 @@ static int start(const char* path, char const* argv[], abend_handler_t abend)
   process.argv[2] = malloc(32);
   FAIL(process.argv[2] == NULL, START_CANNOT_MALLOC, fail);
   sprintf(process.argv[2], "%d", process.canary);
+
   process.argv[3] = strdup(path);
   for (i = 0; i < argc; i++) {
     process.argv[i + 4] = strdup(argv[i]);
@@ -1025,7 +1028,8 @@ fail:
 /* &#9824; */
 static void* reap(void *data)
 {
-  static int REAPER = 0, CANARY = 1, input[2], instance = 0,
+  static int REAPER = 0, CANARY = 1;
+  int input[2], instance = 0,
     sig = SIGTERM, timeout = -1, hangup = 0, shutdown = 0;
   int status, err;
   struct pollfd channels[2];
@@ -1320,16 +1324,6 @@ static int ready() {
 
 /* ### Retry */
 
-/* Intialize thread local storage to keep a thread local copy of the instance
- * number of the plugin process server. We send the instance number to the
- * reaper thread to signal that we've detected a hung plugin process server. */
-static void allocate_instance_counter() {
-  int *counter;
-  counter = malloc(sizeof(int));
-  (void) 0; /* Docco thinks this is a comment -> */  *counter = 1;
-  (void) pthread_setspecific(process.key, counter);
-}
-
 /* After initialization, the plugin server process is supposed to run, without
  * interruption, until the orderly shutdown of the plugin server process, prior
  * to unloading the plugin library.
@@ -1425,12 +1419,17 @@ static void allocate_instance_counter() {
 /* &#9824; */
 static int retry(int milliseconds) {
   int err, *instance, terminate, message[2];
-  /* Initialize the thread local instance counter, once, to the number 1, the
-   * first instance of plugin server process. */
-  (void) pthread_once(&process.onceler, allocate_instance_counter);
 
   /* Get the current value of the thread local instance. */
   instance = ((int*) pthread_getspecific(process.key)); 
+  
+  /* If there is no instance, we allocate one. The cleanup function associated
+   * with the thread local key will free the pointer at thread exit. */
+  if (instance == NULL) {
+    instance = malloc(sizeof(int));
+    *instance = 1;
+    (void) pthread_setspecific(process.key, instance);
+  }
 
   /* Dip into our mutex. */
   (void) pthread_mutex_lock(&process.mutex);
@@ -1458,6 +1457,8 @@ static int retry(int milliseconds) {
    * TK Already awake.
    */
   if (terminate) {
+    trace("retry", "terminate");
+
     message[0] = *instance;
     message[1] = milliseconds;
     HANDLE_EINTR(write(process.pipes[PIPE_REAPER][1], message, sizeof(message)), err); 
@@ -1465,9 +1466,9 @@ static int retry(int milliseconds) {
 
   /* Wait for the server to be ready again. */
   if (ready()) {
-    /* Grab the instance number and shutdown state. */
+    /* Grab the instance number state. */
     (void) pthread_mutex_lock(&process.mutex);
-    (void) 0; *instance = process.instance;
+    *instance = process.instance;
     (void) pthread_mutex_unlock(&process.mutex);
 
     /* Stash the instance number in thread local storage. */
@@ -1539,12 +1540,14 @@ static int shutdown() {
    * for it to finish before we continue. */
   (void) pthread_mutex_lock(&process.mutex);
   while (process.restarting) {
+    trace("shutdown", "restarting");
     (void) pthread_cond_wait(&process.cond.running, &process.mutex);
   }
 
   /* Wait for the shutdown flag to set, otherwise a call to done is going to
    * report an invalid state. */
   while (! process.shutdown) {
+    trace("shutdown", "shutdown");
     (void) pthread_cond_wait(&process.cond.shutdown, &process.mutex);
   }
 

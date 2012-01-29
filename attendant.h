@@ -106,7 +106,7 @@
  * server process that can exhibit this behavior and have it be the one to
  * manage your aberant plugin server process.
  *
- * ## Complications
+ * ## Difficulties
  *
  * It is difficult to implement process monitoring in fashion that
  *
@@ -137,6 +137,39 @@
  * there is no such thing as a child process. A process is isolated from the
  * process that started it entirely. There is no signal handling, and therefore
  * no way to signal an orderly shutdown.
+ *
+ * In order to reliable use the standard in pipe to send data to the plugin
+ * server process on UNIX, the host application must have the signal handler for
+ * `SIGPIPE` set to `SIG_IGN`. Writing to the pipe when the plugin process
+ * server has closed will cause a `SIGPIPE` signal. If there is no `SIGPIPE`
+ * handler in place, then the unhandled `SIGPIPE` will cause the host
+ * application to terminate.
+ * 
+ * If there is a `SIGPIPE` handler in place, then the host application will
+ * handle a `SIGPIPE` from a child that it did not create. Testing may determine
+ * that this is not an issue, that the registered handler is doing the right
+ * thing.
+ *
+ * OS X offers a per file descriptor flag that disables SIGPIPE, but this is not
+ * available on Linux.
+ *
+ * You can add a test to your plugin where it writes to a pipe with a closed
+ * read file descriptor. If the host application disappears when your plugin is
+ * loaded, it is not handling `SIGPIPE` gracefully.
+ *
+ * If this is the case, you should not use the standard in pipe. You can still
+ * use read from standard out and standard error. You can still send data to
+ * your plugin server process through program arguments. Using program arguments
+ * and standard output, you can bootstrap a more robust form of IPC. UNIX domain
+ * sockets, for example, can disable `SIGPIPE` on a per socket basis, regardless
+ * of the disposition of the `SIGPIPE` signal handlers.
+ *
+ * Our ideal UNIX host application would set a benign child handler to handle
+ * `SIGCHLD`, or leave it the default. It would use `waitpid` to wait only on
+ * the exit of child processes that it created itself, allowing the plugin to
+ * use `waitpid` to wait on the exit of the plugin process server. It elminate
+ * `SIGPIPE` signals by  setting its `SIGPIPE` handler set to the `SIG_IGN`
+ * disposition.
  *
  * ## How It Works
  *
@@ -217,6 +250,14 @@
  * memory.
  * 
  * ## Limitations 
+ *
+ * If the host application does not ignore `SIGPIPE`, the plugin stub cannot
+ * rely on the `stdin` pipe to send data to the plugin server process.
+ *
+ * You could endavour to write a plugin server process that itself will not
+ * crash, a minimal plugin server process, that in turn monitors the workhorse
+ * plugin server process, but I'm sure you're going to find a few more
+ * difficulties at that level in any case.
  *
  * There are limitations to what an out-of-process server can do. If the plugin
  * is supposed to draw a region of a window in a desktop application, for
@@ -407,7 +448,7 @@ struct attendant {
    * entered the final shutdown state due to an orderly shutdown. */
 
   /* &#9824; */
-  int (*retry)();
+  int (*retry)(int millis);
 
   /* `shutdown` &mdash; Inform the plugin attendant that shutdown time has come
    * and that the next plugin server process is expected.
