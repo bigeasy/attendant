@@ -231,10 +231,9 @@ struct process_t {
   /* A count of the number of times that the server has started and restarted.
    */
   int instance;
-  /* The attendant error code for last thing that went wrong. */
-  int last_error;
-  /* The system error code for the last thing that went wrong. */
-  int last_errno;
+  /* The attendant error code and system error code for last thing that went
+   * wrong. */
+  struct attendant__errors errors;
   /* Thread local storage key for thread local storage of instance count. */
   pthread_key_t key;          
   /* Gaurd process variables referenced by both the stub functions running in
@@ -402,9 +401,9 @@ static void close_pipe(int pipeno, int direction) {
 /* Record the given plugin attendant error code along with the current system
  * error number. */
 static void set_error(int error) {
-  if (process.last_error == 0) {
-    process.last_error = error;
-    process.last_errno = errno;
+  if (process.errors.attendant == 0) {
+    process.errors.attendant = error;
+    process.errors.system = errno;
   }
 }
 
@@ -683,8 +682,8 @@ static int start(const char* path, char const* argv[], abend_handler_t abend)
 
   /* Reset our error codes and increment the instance count. */
   pthread_mutex_lock(&process.mutex);
-  process.last_error = 0;
-  process.last_errno = 0;
+  process.errors.attendant = 0;
+  process.errors.system = 0;
   process.instance++;
   pthread_mutex_unlock(&process.mutex);
 
@@ -927,8 +926,8 @@ static void *launch(void *data)
     PARTIAL_READ(err, sizeof(code), FORK_ERROR_CODE, fail);
 
     /* Set the plugin attendant error code and system error number. */
-    process.last_error = code[0];
-    process.last_errno = code[1];
+    process.errors.attendant = code[0];
+    process.errors.system = code[1];
 
     /* Abend. */
     goto fail;
@@ -964,8 +963,8 @@ static void *launch(void *data)
     PARTIAL_READ(err, sizeof(code), EXEC_ERROR_CODE, fail);
 
     /* Set the plugin attendant error code and system error number. */
-    process.last_error = code[0];
-    process.last_errno = code[1];
+    process.errors.attendant = code[0];
+    process.errors.system = code[1];
 
     /* Abend. */
     goto fail;
@@ -1127,7 +1126,7 @@ static void* reap(void *data)
      * an unstable state. We don't want the plugin attendant itself to hang, and
      * it can't seem to rely on useful behavior from pipes, so we nuke it from
      * orbit. It's the only way to be sure. */
-    if (process.last_error) {
+    if (process.errors.attendant) {
       /* Trigger a shutdown. */
       shutdown = 1;
       /* Leave the reaper pipe polling loop. */
@@ -1632,9 +1631,11 @@ static int scram() {
   return 0;
 }
 
-/* TODO */
-static int* errors() {
-  return NULL;
+/* Return the last error recorded by the attendant. */
+
+/* &#9824; */
+static struct attendant__errors errors() {
+  return process.errors;
 }
 
 /* Called when the library unloaded. This will not shutdown the server process.

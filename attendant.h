@@ -299,6 +299,11 @@
 extern "C" {
 #endif 
 
+struct attendant__errors {
+    int attendant;
+    int system;
+};
+
 /* On UNIX a pipe is a file descriptor. On Windows, a pipe a `HANDLE`. */
 #ifdef __WIN32
 typedef HANDLE attendant__pipe_t;
@@ -543,7 +548,7 @@ struct attendant {
    */
 
   /* &#9824; */
-  int* (*errors)();
+  struct attendant__errors (*errors)();
 
   /* `destroy` &mdash; Called after the plugin process server has shutdown, the
    * plugin attendant has entered the shutdown state. Call this function after
