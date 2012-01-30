@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "1..2"
+
 function ok()
 {
     local message=$1 status=$?;
@@ -14,3 +16,7 @@ function ok()
         echo "$status"
     fi
 }
+
+result=$(echo " " | t/bin/server)
+ok "server exited normally"
+[ $result == "RUNNING" ]; ok "server state clean"
