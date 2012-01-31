@@ -56,4 +56,6 @@ int check_reset(const char *message) {
     CHECK(err = close(pipein[1]), err == -1);
     CHECK(err = fclose(out), err == -1);
   }
+
+  return EXIT_SUCCESS;
 }
