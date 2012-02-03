@@ -12,6 +12,8 @@ Project(Attendant)
 
 if (WIN32)
   add_executable(attendant attendant_win.c main_win.c)
+  add_executable(relay relay_win.c)
+  add_executable(server server_win.c)
 else()
   FILE(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/t/attendant)
   FILE(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/t/relay)

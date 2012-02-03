@@ -102,14 +102,15 @@ static void free_pipe_handles() {
   int i;
   for (i = 0; i < 3; i++) {
     if (process.stdio.parent[i]) {
-      /* Free handle. */
+      CloseHandle(process.stdio.parent[i]);
+      process.stdio.parent[i] = NULL;
     }
     if (process.stdio.child[i]) {
-      /* Free handle. */
+      CloseHandle(process.stdio.child[i]);
+      process.stdio.child[i] = NULL;
     }
   }
 }
-
 
 #define okay(condition, error)                  \
   do {                                          \
@@ -121,13 +122,32 @@ static void free_pipe_handles() {
   } while (0);
 
 static int initalize(const char *relay, int canary) {
-  int success;
+  int success, i;
   SECURITY_ATTRIBUTES security; 
 
+  /* We're not up for the task of defending against attackers that have access
+   * to the system as the current user. We go with the [default security
+   * attributes](
+   * http://msdn.microsoft.com/en-us/library/windows/desktop/aa365600.aspx). If
+   * the system so far compromised that we need to restrict anonymous pipes
+   * using ACLS, then there are so many attack vectors, it is well beyond the
+   * compexlity bugdet of an NPAPI or similar plugin.
+   *
+   * I'm always concersed that I'm opening myself up to trollish criticism,
+   * that this is some sort of adminission that I don't care about security.
+   * It's not. I'd be curious to hear a ranting challenge to these comments,
+   * because I can only imagine the irrationality.
+   */
   security.nLength = sizeof(SECURITY_ATTRIBUTES); 
   security.bInheritHandle = TRUE; 
   security.lpSecurityDescriptor = NULL; 
   
+  /* Create the [standard I/O redirection pipes](
+   * http://msdn.microsoft.com/en-us/library/windows/desktop/ms682499.aspx
+   * ). We keep these pipes around between recovered instances, so that we do
+   * not have to gaurd the handles with a critical section. That is, they are
+   * set once and remain valid for the lifetime of the plugin stub.
+   */
   success = CreatePipe(&process.stdio.parent[0], &process.stdio.child[0],
        &security, 0);
   okay(success, INITIALIZE_CANNOT_CREATE_STDIN_PIPE);
@@ -139,6 +159,14 @@ static int initalize(const char *relay, int canary) {
   success = CreatePipe(&process.stdio.child[2], &process.stdio.parent[2],
        &security, 0);
   okay(success, INITIALIZE_CANNOT_CREATE_STDERR_PIPE);
+
+  /* Ensure that the parent ends of the standard I/O pipes are not inherited. */
+  for (i = PIPE_STDIN; i <= PIPE_STDERR; i++) {
+    success = SetHandleInformation(process.stdio.parent[i],
+        HANDLE_FLAG_INHERIT, 0);
+    okay(success, INITIALIZE_CANNOT_CREATE_STDIN_PIPE + i);
+  }
+
 done:
   if (!success) {
     free_pipe_handles();
@@ -152,7 +180,8 @@ done:
  * space, you might be in trouble. Do your utmost to bootstrap through pipes.
  *
  * More
- * [on Windows command line escaping](http://stackoverflow.com/questions/2403647/how-to-escape-parameter-in-windows-command-line).
+ * [on Windows command line
+ * escaping](http://stackoverflow.com/questions/2403647/how-to-escape-parameter-in-windows-command-line).
  */
 static int start(const char* path, char const* argv[], abend_handler_t abend) {
   return 0;
@@ -184,6 +213,7 @@ static struct attendant__errors errors() {
 }
 
 static int destroy() {
+  free_pipe_handles();
   return 0;
 }
 
