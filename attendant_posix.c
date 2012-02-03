@@ -207,7 +207,7 @@ struct trace {
  * static variables and which are local variables.*/
 
 /* &#9824; */
-struct process_t {
+struct process {
   /* Absolute path to the relay program. */
   char *relay;
   /* Arguments to pass to relay program, starting with the absolute path to the
@@ -260,7 +260,7 @@ struct process_t {
  * attendant. */
 
 /* &mdash; */
-static struct process_t process;
+static struct process process;
 
 /* ### Pipes
  *
