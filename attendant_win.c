@@ -1,3 +1,6 @@
+#include <Windows.h>
+#include "attendant.h"
+
 typedef void (*abend_handler_t)();
 
 struct process_t {
@@ -10,7 +13,7 @@ static struct process_t process;
 #define PIPE_STDOUT 1
 #define PIPE_STDERR 2
 
-static pipe_t stdio(int pipe) {
+static attendant__pipe_t stdio(int pipe) {
   return NULL;
 }
 
@@ -30,7 +33,7 @@ static int retry(int milliseconds) {
   return 0;
 }
 
-static int shutdown() {
+static int attendant__shutdown() {
   return 0;
 }
 
@@ -43,7 +46,8 @@ static int scram() {
 }
 
 static struct attendant__errors errors() {
-  return NULL;
+  struct attendant__errors errors = { 0, 0 };
+  return errors;
 }
 
 static int destroy() {
@@ -56,7 +60,7 @@ struct attendant attendant =
 , ready
 , stdio
 , retry
-, shutdown
+, attendant__shutdown
 , done
 , scram
 , errors

@@ -305,7 +305,7 @@ struct attendant__errors {
 };
 
 /* On UNIX a pipe is a file descriptor. On Windows, a pipe a `HANDLE`. */
-#ifdef __WIN32
+#ifdef _WIN32
 typedef HANDLE attendant__pipe_t;
 #else
 typedef int attendant__pipe_t;
