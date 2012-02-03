@@ -134,6 +134,18 @@
  * The worst case is we have an enormous number of open file hanldes that we
  * have to close. The best case is that we have none. The error case is that
  * here are no handles left to get the handles we need to close the handles.
+ *
+ * TODO Occurs to me that we ought to insist that pipes are only used at
+ * startup, to bootstrap a different form of IPC. We don't allow the pipes to be
+ * used as the primary form of IPC. You can use the pipes to negotiate a TCP/IP
+ * port or a named pipe, then use that for IPC. This means we can do something
+ * to prevent `SIGPIPE`, plus, close the redirected standard I/O after the
+ * bootstrapping is complete.
+ *
+ * We would move to a startup model that had a `starter` and a `connector`.
+ *
+ * Does this make it easier? Won't know until I integrate. Keeping standard I/O
+ * around doesn't seem to be a big win.
  */
 
 /* The gang's all here. */
