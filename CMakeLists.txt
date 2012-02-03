@@ -22,7 +22,7 @@ else()
     set_target_properties(${TEST} PROPERTIES COMPILE_FLAGS "-D_DEBUG=1 -Wall")
   endmacro()
 
-  add_executable(relay relay.c errors.c)
+  add_executable(relay relay_posix.c errors.c)
 
   _create_test(t/relay/fds.t src/t/reset.c)
   _create_test(t/relay/signals.t src/t/reset.c)
