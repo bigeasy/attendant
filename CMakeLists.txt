@@ -11,7 +11,7 @@ cmake_minimum_required (VERSION 2.6)
 Project(Attendant)
 
 if (WIN32)
-    add_executable(attendant attendant_win.c errors.c)
+  add_executable(attendant attendant_win.c errors.c)
 else()
   FILE(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/t/attendant)
   FILE(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/t/relay)
