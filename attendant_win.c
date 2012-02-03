@@ -123,7 +123,7 @@ static void free_pipe_handles() {
 
 static int initalize(const char *relay, int canary) {
   int success, i;
-  SECURITY_ATTRIBUTES security; 
+  SECURITY_ATTRIBUTES security;
 
   /* We're not up for the task of defending against attackers that have access
    * to the system as the current user. We go with the [default security
@@ -166,7 +166,6 @@ static int initalize(const char *relay, int canary) {
         HANDLE_FLAG_INHERIT, 0);
     okay(success, INITIALIZE_CANNOT_CREATE_STDIN_PIPE + i);
   }
-
 done:
   if (!success) {
     free_pipe_handles();
@@ -184,6 +183,22 @@ done:
  * escaping](http://stackoverflow.com/questions/2403647/how-to-escape-parameter-in-windows-command-line).
  */
 static int start(const char* path, char const* argv[], abend_handler_t abend) {
+  int success;
+  wchar_t application[MAX_PATH];
+  STARTUPINFOW startup;
+  PROCESS_INFORMATION info;
+
+  GetCurrentDirectoryW(MAX_PATH, application);
+  wcscat_s(application, MAX_PATH, L"\\Debug\\server.exe");
+  memset( &startup, 0L, sizeof(STARTUPINFO) );
+  startup.cb = sizeof(STARTUPINFO); 
+  startup.hStdInput = process.stdio.child[0];
+  startup.hStdOutput = process.stdio.child[1];
+  startup.hStdError = process.stdio.child[2];
+  startup.dwFlags |= STARTF_USESTDHANDLES;
+  success = CreateProcessW(application, L"", NULL, NULL, TRUE, 0, NULL, NULL, &startup, &info);
+  okay(success, START_CANNOT_EXECV);
+done:
   return 0;
 }
 
