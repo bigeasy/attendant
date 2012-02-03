@@ -248,7 +248,7 @@ struct process_t {
   /* We create seven pipes, so we create an array of seven pipe pairs. We then
    * refer to the pipes by name in code using the defines below that map the
    * pipe name to a pipe index. */
-  int pipes[7][2];            
+  attendant__pipe_t pipes[7][2];            
   /* Tracing variables. See above. */
 #ifdef _DEBUG
   struct trace trace;
@@ -329,7 +329,7 @@ static struct process_t process;
  */
 
 /* &#9824; */
-static pipe_t stdio(int pipe)
+static attendant__pipe_t stdio(int pipe)
 {
   return process.pipes[pipe][pipe == 0 ? 1 : 0];
 }

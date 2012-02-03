@@ -308,7 +308,7 @@ struct attendant__errors {
 #ifdef __WIN32
 typedef HANDLE attendant__pipe_t;
 #else
-typedef int pipe_t;
+typedef int attendant__pipe_t;
 #endif
 
 /* There is one instance of the plugin attendant that monitors only one instance
@@ -427,7 +427,7 @@ struct attendant {
    */
 
   /* &#9824; */
-  pipe_t (*stdio)(int num);
+  attendant__pipe_t (*stdio)(int num);
 
   /* `retry` &mdash; Report that IPC with the plugin server process failed,
    * indicating that the plugin server process is either crashed or hung.
