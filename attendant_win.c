@@ -148,15 +148,15 @@ static int initalize(const char *relay, int canary) {
    * not have to gaurd the handles with a critical section. That is, they are
    * set once and remain valid for the lifetime of the plugin stub.
    */
-  success = CreatePipe(&process.stdio.parent[0], &process.stdio.child[0],
+  success = CreatePipe(&process.stdio.child[0], &process.stdio.parent[0],
        &security, 0);
   okay(success, INITIALIZE_CANNOT_CREATE_STDIN_PIPE);
 
-  success = CreatePipe(&process.stdio.child[1], &process.stdio.parent[1],
+  success = CreatePipe(&process.stdio.parent[1], &process.stdio.child[1],
        &security, 0);
   okay(success, INITIALIZE_CANNOT_CREATE_STDOUT_PIPE);
 
-  success = CreatePipe(&process.stdio.child[2], &process.stdio.parent[2],
+  success = CreatePipe(&process.stdio.parent[2], &process.stdio.child[2],
        &security, 0);
   okay(success, INITIALIZE_CANNOT_CREATE_STDERR_PIPE);
 
@@ -171,6 +171,19 @@ done:
     free_pipe_handles();
   }
   return 0;
+}
+
+static void send_recv() {
+  const char* when = "echo\n", *exit = "exit\n";
+  char buffer[1024];
+  DWORD written, read;
+  int success;
+  success = ReadFile(process.stdio.parent[1], buffer, sizeof(buffer), &read, NULL);
+  success = WriteFile(process.stdio.parent[0], when, 5, &written, NULL);
+  FlushFileBuffers(process.stdio.parent[0]);
+  success = ReadFile(process.stdio.parent[1], buffer, sizeof(buffer), &read, NULL);
+  success = WriteFile(process.stdio.parent[0], exit, 5, &written, NULL);
+  FlushFileBuffers(process.stdio.parent[0]);
 }
 
 /* Command line parsing in Windows is a [sorry state of
@@ -198,6 +211,8 @@ static int start(const char* path, char const* argv[], abend_handler_t abend) {
   startup.dwFlags |= STARTF_USESTDHANDLES;
   success = CreateProcessW(application, L"", NULL, NULL, TRUE, 0, NULL, NULL, &startup, &info);
   okay(success, START_CANNOT_EXECV);
+
+  send_recv();
 done:
   return 0;
 }
