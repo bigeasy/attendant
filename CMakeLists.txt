@@ -8,7 +8,7 @@
 cmake_minimum_required (VERSION 2.6)
 #set (CMAKE_BACKWARDS_COMPATIBILITY 2.6)
 
-Project(Attendant)
+project(attendant)
 
 if (WIN32)
   add_executable(attendant attendant_win.c main_win.c)
