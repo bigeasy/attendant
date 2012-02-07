@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>attendant_win.c</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<link rel="stylesheet" media="all" href="/attendant/css/docco.css">
+</head>
+<body>
+<div id="container">
+<div id="background"></div>
+  <table cellspacing="0" cellpadding="0">
+    <thead>
+      <tr>
+        <th class="docs"><h1>attendant_win.c</th>
+        <th class="code"></th>
+      </tr>
+    </thead>
+    <tbody>
+      
+        <tr>
+          <td class="docs"><p>The vagaries of process management in UNIX have already greatly limited our
+expectations of our process monitor. We've limited ourselves to command line
+arguments and standard I/O for IPC, and then only to get the ball rolling.
+This leaves us with process management that is more or less, process
+management a la Windows.</p>
+
+<p>Out Windows attendant still requires that we shield the child process from
+inherited file handles. The problem of inherited file handles in Windows is
+more onerous that in UNIX, since a file handle will lock the file as well. If
+the host application has is opening and closing a file that our plugin server
+process has inherited, it will fail at the next reopen because the plugin
+server process will hold an open file handle.</p>
+
+<p>Apparently, handles to kernel objects are just numbers, and you can <a href="http://comsci.liu.edu/~murali/win32/Handles.htm">pass them
+around as the string representation of those
+numbers</a>. Each process has
+its own set of handles, but with <code>DuplicateHandle</code> you can create a handle in
+another process. You need some way to tell that other process about the
+handle, though. We can use either named pipes or mailslots.</p>
+
+<p>Thus, we still need our relay program. Our relay program is created without
+handle inheritence, but with a command line that describes the handle of an
+anonymous pipe. The relay program will read that argument for the handle of
+the anonymous pipe.</p>
+
+<p>The anonymous pipe is used to pass inheritable child ends of the standard I/O
+pipes. Our relay program launches our target program, with the target
+arguments, and with inherience set, and with our </p>
+
+<p>TODO Jobs.</p>
+
+<ul>
+<li><a href="http://stackoverflow.com/questions/6259055/createprocess-such-that-child-process-is-killed-when-parent-is-killed">CreateProcess such that child process is killed when parent is
+killed?</a>.</li>
+<li><a href="http://stackoverflow.com/questions/53208/how-do-i-automatically-destroy-child-processes-in-windows">How do I automatically destroy child processes in
+Windows?</a>.</li>
+</ul>
+
+<p>We don't care about <a href="http://msdn.microsoft.com/en-us/library/windows/desktop/aa365600.aspx">named pipe
+security</a></p>
+
+<p>TODO Duplicate handle.</p>
+
+<ul>
+<li><a href="http://stackoverflow.com/questions/819710/<a href='http://github.com/duplicatehandle-use-in-first-or-second-process/819735/issues/#issue/819735'>duplicatehandle-use-in-first-or-second-process/819735#819735</a>">DuplicateHandle(), use in first or second
+process?</a>
+*
+<a href="http://msdn.microsoft.com/en-us/library/windows/desktop/ms724251.aspx">DuplicateHandle</a>.</li>
+<li><a href="http://www.codeguru.com/forum/archive/index.php/t-432338.html">Child process inheriting all handles</a>.</li>
+<li><a href="http://msdn.microsoft.com/en-us/library/windows/desktop/ms683463.aspx">Inheritance</a></li>
+<li><a href="http://msdn.microsoft.com/en-us/library/windows/desktop/aa365782.aspx">Pipe Handle Inheritence</a></li>
+</ul>
+
+<p>TODO Critical Sections.</p>
+
+<ul>
+<li><a href="http://msdn.microsoft.com/en-us/library/windows/desktop/ms682530.aspx">Critical Sections</a>.</li>
+</ul></td>
+          <td class="code"><div class="highlight"><pre><div class="highlight"><pre></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="cp">#include &lt;Windows.h&gt;</span>
+<span class="cp">#include &quot;attendant.h&quot;</span>
+<span class="cp">#include &quot;errors.h&quot;</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>The abend handler function type. </p></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="k">typedef</span> <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">abend_handler_t</span><span class="p">)();</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>A structure that gathers and organizes our standard I/O pipe handles. </p></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="k">struct</span> <span class="n">stdio</span> <span class="p">{</span>
+  <span class="n">attendant__pipe_t</span> <span class="n">parent</span><span class="p">[</span><span class="mi">3</span><span class="p">];</span>
+  <span class="n">attendant__pipe_t</span> <span class="n">child</span><span class="p">[</span><span class="mi">3</span><span class="p">];</span>
+<span class="p">};</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>The one and only process we watch. Static variables are gathered into this
+structure so that when reading the code below, it is easy to see which are
+static variables and which are local variables.</p></td>
+          <td class="code"><div class="highlight"><pre>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>&#9824; </p></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="k">struct</span> <span class="n">process</span> <span class="p">{</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>Count of the number of times that the server has started and restarted. </p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="kt">int</span> <span class="n">instance</span><span class="p">;</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>A collection of standard I/O pipe handles. </p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="k">struct</span> <span class="n">stdio</span> <span class="n">stdio</span><span class="p">;</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>The attendant error code and system error code for last error. </p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="k">struct</span> <span class="n">attendant__errors</span> <span class="n">errors</span><span class="p">;</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>&mdash; </p></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="p">};</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>The variable structure for our once and only instance of the plugin
+attendant. </p></td>
+          <td class="code"><div class="highlight"><pre>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>&mdash; </p></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="k">static</span> <span class="k">struct</span> <span class="n">process</span> <span class="n">process</span><span class="p">;</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>Handles to standard I/O pipes are stored in arrays indexed by the traditional
+UNIX file descriptor number. </p></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="cp">#define PIPE_STDIN  0</span>
+<span class="cp">#define PIPE_STDOUT 1</span>
+<span class="cp">#define PIPE_STDERR 2</span>
+
+<span class="k">static</span> <span class="n">attendant__pipe_t</span> <span class="nf">stdio</span><span class="p">(</span><span class="kt">int</span> <span class="n">pipe</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>Free the allocated pipe handles. </p></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="k">static</span> <span class="kt">void</span> <span class="nf">free_pipe_handles</span><span class="p">()</span> <span class="p">{</span>
+  <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+  <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="p">{</span>
+      <span class="n">CloseHandle</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+      <span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">child</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="p">{</span>
+      <span class="n">CloseHandle</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">child</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+      <span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">child</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+    <span class="p">}</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cp">#define okay(condition, error)                  \</span>
+<span class="cp">  do {                                          \</span>
+<span class="cp">    if (!condition) {                           \</span>
+<span class="cp">        process.errors.attendant = error;       \</span>
+<span class="cp">        process.errors.system = GetLastError(); \</span>
+<span class="cp">        goto done;                              \</span>
+<span class="cp">    }                                           \</span>
+<span class="cp">  } while (0);</span>
+
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">initalize</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">relay</span><span class="p">,</span> <span class="kt">int</span> <span class="n">canary</span><span class="p">)</span> <span class="p">{</span>
+  <span class="kt">int</span> <span class="n">success</span><span class="p">,</span> <span class="n">i</span><span class="p">;</span>
+  <span class="n">SECURITY_ATTRIBUTES</span> <span class="n">security</span><span class="p">;</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>We're not up for the task of defending against attackers that have access
+to the system as the current user. We go with the [default security
+attributes](
+<a href='http://msdn.microsoft.com/en-us/library/windows/desktop/aa365600.aspx'>http://msdn.microsoft.com/en-us/library/windows/desktop/aa365600.aspx</a>). If
+the system so far compromised that we need to restrict anonymous pipes
+using ACLS, then there are so many attack vectors, it is well beyond the
+compexlity bugdet of an NPAPI or similar plugin.</p>
+
+<p>I'm always concersed that I'm opening myself up to trollish criticism,
+that this is some sort of adminission that I don't care about security.
+It's not. I'd be curious to hear a ranting challenge to these comments,
+because I can only imagine the irrationality.</p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="n">security</span><span class="p">.</span><span class="n">nLength</span> <span class="o">=</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">SECURITY_ATTRIBUTES</span><span class="p">);</span> 
+  <span class="n">security</span><span class="p">.</span><span class="n">bInheritHandle</span> <span class="o">=</span> <span class="n">TRUE</span><span class="p">;</span> 
+  <span class="n">security</span><span class="p">.</span><span class="n">lpSecurityDescriptor</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span> 
+  </pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>Create the [standard I/O redirection pipes](
+<a href='http://msdn.microsoft.com/en-us/library/windows/desktop/ms682499.aspx'>http://msdn.microsoft.com/en-us/library/windows/desktop/ms682499.aspx</a>
+). We keep these pipes around between recovered instances, so that we do
+not have to gaurd the handles with a critical section. That is, they are
+set once and remain valid for the lifetime of the plugin stub.</p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="n">success</span> <span class="o">=</span> <span class="n">CreatePipe</span><span class="p">(</span><span class="o">&amp;</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">child</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+       <span class="o">&amp;</span><span class="n">security</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+  <span class="n">okay</span><span class="p">(</span><span class="n">success</span><span class="p">,</span> <span class="n">INITIALIZE_CANNOT_CREATE_STDIN_PIPE</span><span class="p">);</span>
+
+  <span class="n">success</span> <span class="o">=</span> <span class="n">CreatePipe</span><span class="p">(</span><span class="o">&amp;</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">child</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+       <span class="o">&amp;</span><span class="n">security</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+  <span class="n">okay</span><span class="p">(</span><span class="n">success</span><span class="p">,</span> <span class="n">INITIALIZE_CANNOT_CREATE_STDOUT_PIPE</span><span class="p">);</span>
+
+  <span class="n">success</span> <span class="o">=</span> <span class="n">CreatePipe</span><span class="p">(</span><span class="o">&amp;</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="o">&amp;</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">child</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+       <span class="o">&amp;</span><span class="n">security</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+  <span class="n">okay</span><span class="p">(</span><span class="n">success</span><span class="p">,</span> <span class="n">INITIALIZE_CANNOT_CREATE_STDERR_PIPE</span><span class="p">);</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>Ensure that the parent ends of the standard I/O pipes are not inherited. </p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="n">PIPE_STDIN</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="n">PIPE_STDERR</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">success</span> <span class="o">=</span> <span class="n">SetHandleInformation</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+        <span class="n">HANDLE_FLAG_INHERIT</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+    <span class="n">okay</span><span class="p">(</span><span class="n">success</span><span class="p">,</span> <span class="n">INITIALIZE_CANNOT_CREATE_STDIN_PIPE</span> <span class="o">+</span> <span class="n">i</span><span class="p">);</span>
+  <span class="p">}</span>
+<span class="nl">done:</span>
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">success</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">free_pipe_handles</span><span class="p">();</span>
+  <span class="p">}</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="kt">void</span> <span class="nf">send_recv</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">when</span> <span class="o">=</span> <span class="s">&quot;echo</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="o">*</span><span class="n">exit</span> <span class="o">=</span> <span class="s">&quot;exit</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+  <span class="kt">char</span> <span class="n">buffer</span><span class="p">[</span><span class="mi">1024</span><span class="p">];</span>
+  <span class="n">DWORD</span> <span class="n">written</span><span class="p">,</span> <span class="n">read</span><span class="p">;</span>
+  <span class="kt">int</span> <span class="n">success</span><span class="p">;</span>
+  <span class="n">success</span> <span class="o">=</span> <span class="n">ReadFile</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">buffer</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">buffer</span><span class="p">),</span> <span class="o">&amp;</span><span class="n">read</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">success</span> <span class="o">=</span> <span class="n">WriteFile</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">when</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">written</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">FlushFileBuffers</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+  <span class="n">success</span> <span class="o">=</span> <span class="n">ReadFile</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">buffer</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">buffer</span><span class="p">),</span> <span class="o">&amp;</span><span class="n">read</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">success</span> <span class="o">=</span> <span class="n">WriteFile</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">exit</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">written</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+  <span class="n">FlushFileBuffers</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">parent</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+<span class="p">}</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>Command line parsing in Windows is a <a href="http://www.autohotkey.net/~deleyd/parameters/parameters.htm">sorry state of
+affairs</a>. You
+can only count on it to do simple things, and if you need to include white
+space, you might be in trouble. Do your utmost to bootstrap through pipes.</p>
+
+<p>More
+<a href="http://stackoverflow.com/questions/2403647/how-to-escape-parameter-in-windows-command-line">on Windows command line
+escaping</a>.</p></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">start</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">path</span><span class="p">,</span> <span class="kt">char</span> <span class="k">const</span><span class="o">*</span> <span class="n">argv</span><span class="p">[],</span> <span class="n">abend_handler_t</span> <span class="n">abend</span><span class="p">)</span> <span class="p">{</span>
+  <span class="kt">int</span> <span class="n">success</span><span class="p">;</span>
+  <span class="kt">wchar_t</span> <span class="n">application</span><span class="p">[</span><span class="n">MAX_PATH</span><span class="p">];</span>
+  <span class="n">STARTUPINFOW</span> <span class="n">startup</span><span class="p">;</span>
+  <span class="n">PROCESS_INFORMATION</span> <span class="n">info</span><span class="p">;</span>
+
+  <span class="n">GetCurrentDirectoryW</span><span class="p">(</span><span class="n">MAX_PATH</span><span class="p">,</span> <span class="n">application</span><span class="p">);</span>
+  <span class="n">wcscat_s</span><span class="p">(</span><span class="n">application</span><span class="p">,</span> <span class="n">MAX_PATH</span><span class="p">,</span> <span class="s">L&quot;</span><span class="se">\\</span><span class="s">Debug</span><span class="se">\\</span><span class="s">server.exe&quot;</span><span class="p">);</span>
+  <span class="n">memset</span><span class="p">(</span> <span class="o">&amp;</span><span class="n">startup</span><span class="p">,</span> <span class="mi">0L</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">STARTUPINFO</span><span class="p">)</span> <span class="p">);</span>
+  <span class="n">startup</span><span class="p">.</span><span class="n">cb</span> <span class="o">=</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">STARTUPINFO</span><span class="p">);</span> 
+  <span class="n">startup</span><span class="p">.</span><span class="n">hStdInput</span> <span class="o">=</span> <span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">child</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+  <span class="n">startup</span><span class="p">.</span><span class="n">hStdOutput</span> <span class="o">=</span> <span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">child</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+  <span class="n">startup</span><span class="p">.</span><span class="n">hStdError</span> <span class="o">=</span> <span class="n">process</span><span class="p">.</span><span class="n">stdio</span><span class="p">.</span><span class="n">child</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+  <span class="n">startup</span><span class="p">.</span><span class="n">dwFlags</span> <span class="o">|=</span> <span class="n">STARTF_USESTDHANDLES</span><span class="p">;</span>
+  <span class="n">success</span> <span class="o">=</span> <span class="n">CreateProcessW</span><span class="p">(</span><span class="n">application</span><span class="p">,</span> <span class="s">L&quot;&quot;</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">TRUE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">startup</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">info</span><span class="p">);</span>
+  <span class="n">okay</span><span class="p">(</span><span class="n">success</span><span class="p">,</span> <span class="n">START_CANNOT_EXECV</span><span class="p">);</span>
+
+  <span class="n">send_recv</span><span class="p">();</span>
+<span class="nl">done:</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">ready</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">retry</span><span class="p">(</span><span class="kt">int</span> <span class="n">milliseconds</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">attendant__shutdown</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">done</span><span class="p">(</span><span class="kt">int</span> <span class="n">timeout</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">scram</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="k">struct</span> <span class="n">attendant__errors</span> <span class="nf">errors</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">struct</span> <span class="n">attendant__errors</span> <span class="n">errors</span> <span class="o">=</span> <span class="p">{</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span> <span class="p">};</span>
+  <span class="k">return</span> <span class="n">errors</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">destroy</span><span class="p">()</span> <span class="p">{</span>
+  <span class="n">free_pipe_handles</span><span class="p">();</span>
+  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">struct</span> <span class="n">attendant</span> <span class="n">attendant</span> <span class="o">=</span>
+<span class="p">{</span> <span class="n">initalize</span>
+<span class="p">,</span> <span class="n">start</span>
+<span class="p">,</span> <span class="n">ready</span>
+<span class="p">,</span> <span class="n">stdio</span>
+<span class="p">,</span> <span class="n">retry</span>
+<span class="p">,</span> <span class="n">attendant__shutdown</span>
+<span class="p">,</span> <span class="n">done</span>
+<span class="p">,</span> <span class="n">scram</span>
+<span class="p">,</span> <span class="n">errors</span>
+<span class="p">,</span> <span class="n">destroy</span>
+<span class="p">};</span>
+</pre></div>
+</pre></div></td>
+        </tr>
+      
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

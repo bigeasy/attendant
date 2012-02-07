@@ -10,6 +10,7 @@ edify.language "c"
     start:  /^\s*\/\*\s*(.*)/
     end:    /^(.*)\*\//
     strip:  /^\s+\*\s*/
-edify.parse "c", "code", ".", /attendant\.c$/
-edify.stencil /\/.*.c$/, "stencil/docco.stencil"
+edify.parse "c", "code", ".", /attendant[^\/]*\.[hc]$/
+edify.parse "c", "code", ".", /relay[^\/]*\.c$/
+edify.stencil /\/.*.[ch]$/, "stencil/docco.stencil"
 edify.tasks task
