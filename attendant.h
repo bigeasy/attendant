@@ -292,6 +292,13 @@
  * must not signal our process.
  */
 
+/* ## Invocation of the Muse
+ *
+ * > Now Helicon must needs pour forth for me,
+ *  And with her choir Urania must assist me,
+ *  To put in verse things difficult to think. 
+ */
+
 /* &mdash; */
 
 /* Written in C. */
