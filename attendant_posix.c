@@ -1,4 +1,5 @@
-/* A process monitor that watches a single out-of-process server on behalf of a
+/* 
+ * A process monitor that watches a single out-of-process server on behalf of a
  * dynamically loaded plugin running within the context of a host application. 
  *
  * Attendant was written for use in an [NPAPI](https://wiki.mozilla.org/NPAPI)
@@ -148,7 +149,7 @@
  * around doesn't seem to be a big win.
  */
 
-/* The gang's all here. */
+/* *Throw open Helicon now, goddesses, move your songs.* &mdash; Dante */
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>

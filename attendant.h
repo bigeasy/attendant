@@ -1,4 +1,5 @@
-/* A process monitor that watches a single out-of-process server on behalf of a
+/* 
+ * A process monitor that watches a single out-of-process server on behalf of a
  * dynamically loaded plugin running within the context of a host application. 
  *
  * ## On Documentation
@@ -12,6 +13,11 @@
  * time to read the documentation, I can't read it to you. If you were to email
  * me directly, I might type out something just about as long. But, please, do
  * ask questions, and suggest documentation patches if this is confusing.
+ *
+ * &mdash;
+ *
+ * *Now Helicon must needs pour forth for me, And with her choir Urania must
+ *  assist me, To put in verse things difficult to think.* &mdash; Dante
  *
  * ## Origins
  *
