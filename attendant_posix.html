@@ -170,7 +170,7 @@ around doesn't seem to be a big win.</p></td>
         </tr>
       
         <tr>
-          <td class="docs"><p>The gang's all here. </p></td>
+          <td class="docs"><p><em>Throw open Helicon now, goddesses, move your songs.</em> &mdash; Dante </p></td>
           <td class="code"><div class="highlight"><pre>
 <span class="cp">#include &lt;errno.h&gt;</span>
 <span class="cp">#include &lt;fcntl.h&gt;</span>
@@ -204,7 +204,9 @@ have to reinitialize your library to use it. Any variables visibile to both
 this function and your library need to be guarded by a mutex.</p>
 
 <p>And no, don't just make a variable volatile and think that will cover it. It
-needs to be gaurded by a mutex to flush memory accross CPU cores.</p></td>
+needs to be gaurded by a mutex to flush memory accross CPU cores.</p>
+
+<p>TODO Re-docco.</p></td>
           <td class="code"><div class="highlight"><pre>
 </pre></div></td>
         </tr>
@@ -212,7 +214,14 @@ needs to be gaurded by a mutex to flush memory accross CPU cores.</p></td>
         <tr>
           <td class="docs"><p>&#9824; </p></td>
           <td class="code"><div class="highlight"><pre>
-<span class="k">typedef</span> <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">abend_handler_t</span><span class="p">)();</span>
+<span class="k">typedef</span> <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">starter_t</span><span class="p">)(</span><span class="kt">int</span> <span class="n">restart</span><span class="p">);</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>TODO Document. </p></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="k">typedef</span> <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">connector_t</span><span class="p">)(</span><span class="n">attendant__pipe_t</span> <span class="n">in</span><span class="p">,</span> <span class="n">attendant__pipe_t</span> <span class="n">out</span><span class="p">);</span>
 </pre></div></td>
         </tr>
       
@@ -328,9 +337,15 @@ that the server process has died. </p></td>
         </tr>
       
         <tr>
-          <td class="docs"><p>User supplied unexpected exit handler. </p></td>
+          <td class="docs"><p>User supplied server progress program start. </p></td>
           <td class="code"><div class="highlight"><pre>
-  <span class="n">abend_handler_t</span> <span class="n">abend</span><span class="p">;</span></pre></div></td>
+  <span class="n">starter_t</span> <span class="n">starter</span><span class="p">;</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>User supplied plugin stub to server process IPC initialization. </p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="n">connector_t</span> <span class="n">connector</span><span class="p">;</span></pre></div></td>
         </tr>
       
         <tr>
@@ -538,31 +553,6 @@ IPC calls timeout, while the reaper thread can only detect exit.</p></td>
         </tr>
       
         <tr>
-          <td class="docs"><p><code>stdio</code> &mdash; The standard I/O pipes do not change during the life time of
-the plugin attendant. They are preserved across restarts by duping the parent
-end file descriptors of a newly allocated pipe to the parent end file
-descriptors of the previous pipe.  You can cache these values.</p>
-
-<p>Because the system calls are thread safe, there is no need for
-synchronization when reading or writing to a pipe. There are other issues to
-sort out for the plugin developer, regarding multiplexing.</p>
-
-<p>We reassign the parent end file descriptor using dup2.</p></td>
-          <td class="code"><div class="highlight"><pre>
-</pre></div></td>
-        </tr>
-      
-        <tr>
-          <td class="docs"><p>&#9824; </p></td>
-          <td class="code"><div class="highlight"><pre>
-<span class="k">static</span> <span class="n">attendant__pipe_t</span> <span class="nf">stdio</span><span class="p">(</span><span class="kt">int</span> <span class="n">pipe</span><span class="p">)</span>
-<span class="p">{</span>
-  <span class="k">return</span> <span class="n">process</span><span class="p">.</span><span class="n">pipes</span><span class="p">[</span><span class="n">pipe</span><span class="p">][</span><span class="n">pipe</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="mi">1</span> <span class="o">:</span> <span class="mi">0</span><span class="p">];</span>
-<span class="p">}</span>
-</pre></div></td>
-        </tr>
-      
-        <tr>
           <td class="docs"><p>Process is one static structure, one process launched per library. It would
 be easy enough to make this an API that has a handle, but if you did want to
 run and watch a handful of server processes, it would better to make the
@@ -599,6 +589,7 @@ application. We don't want the host application monitoring dozens of workers.</p
           <td class="docs"><p>At times, I'll insert a <code>fprintf(stderr, "%s\n", buffer);</code> right here to
 see what's happening as it happens.</p></td>
           <td class="code"><div class="highlight"><pre>
+    <span class="c1">//fprintf(stderr, &quot;%s\n&quot;, buffer);</span>
     <span class="n">process</span><span class="p">.</span><span class="n">trace</span><span class="p">.</span><span class="n">points</span><span class="p">[</span><span class="n">process</span><span class="p">.</span><span class="n">trace</span><span class="p">.</span><span class="n">count</span><span class="o">++</span><span class="p">]</span> <span class="o">=</span> <span class="n">strdup</span><span class="p">(</span><span class="n">buffer</span><span class="p">);</span>
   <span class="p">}</span>
   <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="n">pthread_mutex_unlock</span><span class="p">(</span><span class="o">&amp;</span><span class="n">process</span><span class="p">.</span><span class="n">trace</span><span class="p">.</span><span class="n">mutex</span><span class="p">);</span>
@@ -679,7 +670,7 @@ before the plugin server process can be started.</p></td>
         <tr>
           <td class="docs"><p>&#9824; </p></td>
           <td class="code"><div class="highlight"><pre>
-<span class="k">static</span> <span class="kt">int</span> <span class="nf">initalize</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">relay</span><span class="p">,</span> <span class="kt">int</span> <span class="n">canary</span><span class="p">)</span>
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">initalize</span><span class="p">(</span><span class="k">struct</span> <span class="n">attendant__initializer</span> <span class="o">*</span><span class="n">initializer</span><span class="p">)</span>
 <span class="p">{</span>
   <span class="k">struct</span> <span class="n">sigaction</span> <span class="n">sigchld</span><span class="p">;</span>
   <span class="n">pthread_condattr_t</span> <span class="n">attr</span><span class="p">;</span>
@@ -688,16 +679,27 @@ before the plugin server process can be started.</p></td>
         </tr>
       
         <tr>
+          <td class="docs"><p>Otherwise, what's the point? </p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="n">FAIL</span><span class="p">(</span><span class="n">initializer</span><span class="o">-&gt;</span><span class="n">starter</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">INITIALIZE_STARTER_REQUIRED</span><span class="p">,</span> <span class="n">fail</span><span class="p">);</span>
+  <span class="n">process</span><span class="p">.</span><span class="n">starter</span> <span class="o">=</span> <span class="n">initializer</span><span class="o">-&gt;</span><span class="n">starter</span><span class="p">;</span>
+
+  <span class="n">FAIL</span><span class="p">(</span><span class="n">initializer</span><span class="o">-&gt;</span><span class="n">connector</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">INITIALIZE_CONNECTOR_REQUIRED</span><span class="p">,</span> <span class="n">fail</span><span class="p">);</span>
+  <span class="n">process</span><span class="p">.</span><span class="n">connector</span> <span class="o">=</span> <span class="n">initializer</span><span class="o">-&gt;</span><span class="n">connector</span><span class="p">;</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
           <td class="docs"><p>The user gets to chose the canary file descriptor on UNIX. </p></td>
           <td class="code"><div class="highlight"><pre>
-  <span class="n">process</span><span class="p">.</span><span class="n">canary</span> <span class="o">=</span> <span class="n">canary</span><span class="p">;</span>
+  <span class="n">process</span><span class="p">.</span><span class="n">canary</span> <span class="o">=</span> <span class="n">initializer</span><span class="o">-&gt;</span><span class="n">canary</span><span class="p">;</span>
 </pre></div></td>
         </tr>
       
         <tr>
           <td class="docs"><p>Take note of the location of the relay program. </p></td>
           <td class="code"><div class="highlight"><pre>
-  <span class="n">process</span><span class="p">.</span><span class="n">relay</span> <span class="o">=</span> <span class="n">strdup</span><span class="p">(</span><span class="n">relay</span><span class="p">);</span>
+  <span class="n">process</span><span class="p">.</span><span class="n">relay</span> <span class="o">=</span> <span class="n">strdup</span><span class="p">(</span><span class="n">initializer</span><span class="o">-&gt;</span><span class="n">relay</span><span class="p">);</span>
 </pre></div></td>
         </tr>
       
@@ -1037,18 +1039,10 @@ passing instance numbers through the launcher thread, but we won't.</p></td>
         <tr>
           <td class="docs"><p>&mdash; </p></td>
           <td class="code"><div class="highlight"><pre>
-<span class="k">static</span> <span class="kt">int</span> <span class="nf">start</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">path</span><span class="p">,</span> <span class="kt">char</span> <span class="k">const</span><span class="o">*</span> <span class="n">argv</span><span class="p">[],</span> <span class="n">abend_handler_t</span> <span class="n">abend</span><span class="p">)</span>
+<span class="k">static</span> <span class="kt">int</span> <span class="nf">start</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">path</span><span class="p">,</span> <span class="kt">char</span> <span class="k">const</span><span class="o">*</span> <span class="n">argv</span><span class="p">[])</span>
 <span class="p">{</span>
   <span class="kt">int</span> <span class="n">err</span><span class="p">,</span> <span class="n">argc</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">running</span><span class="p">;</span>
   <span class="kt">size_t</span> <span class="n">size</span><span class="p">;</span>
-</pre></div></td>
-        </tr>
-      
-        <tr>
-          <td class="docs"><p>Otherwise, what's the point? </p></td>
-          <td class="code"><div class="highlight"><pre>
-  <span class="n">FAIL</span><span class="p">(</span><span class="n">abend</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">START_ABEND_REQUIRED</span><span class="p">,</span> <span class="n">fail</span><span class="p">);</span>
-  <span class="n">process</span><span class="p">.</span><span class="n">abend</span> <span class="o">=</span> <span class="n">abend</span><span class="p">;</span>
 </pre></div></td>
         </tr>
       
@@ -1571,6 +1565,14 @@ and running. Otherwise, the relay program encoutered an error. </p></td>
         </tr>
       
         <tr>
+          <td class="docs"><p>Call the application developer provided connector to initiate the plugin
+stub to plugin server process IPC. </p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="n">process</span><span class="p">.</span><span class="n">connector</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">pipes</span><span class="p">[</span><span class="n">PIPE_STDIN</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">process</span><span class="p">.</span><span class="n">pipes</span><span class="p">[</span><span class="n">PIPE_STDOUT</span><span class="p">][</span><span class="mi">0</span><span class="p">]);</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
           <td class="docs"><p>Our server process is now up and running correctly. Time to launch the
 reaper thread. This reaper thread monitor the plugin server process for
 termination. </p></td>
@@ -1671,8 +1673,12 @@ don't bother saving the exit code.</p></td>
   <span class="k">static</span> <span class="kt">int</span> <span class="n">REAPER</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">CANARY</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
   <span class="kt">int</span> <span class="n">input</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">instance</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="n">sig</span> <span class="o">=</span> <span class="n">SIGTERM</span><span class="p">,</span> <span class="n">timeout</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">hangup</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">shutdown</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-  <span class="kt">int</span> <span class="n">status</span><span class="p">,</span> <span class="n">err</span><span class="p">;</span>
-  <span class="k">struct</span> <span class="n">pollfd</span> <span class="n">channels</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+  <span class="kt">int</span> <span class="n">status</span><span class="p">,</span> <span class="n">err</span><span class="p">,</span> <span class="n">fds</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">count</span><span class="p">;</span>
+  <span class="k">struct</span> <span class="n">pollfd</span> <span class="n">channels</span><span class="p">[</span><span class="mi">4</span><span class="p">];</span>
+  <span class="kt">char</span> <span class="n">buffer</span><span class="p">[</span><span class="mi">2048</span><span class="p">];</span>
+
+  <span class="n">fds</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">process</span><span class="p">.</span><span class="n">pipes</span><span class="p">[</span><span class="n">PIPE_STDOUT</span><span class="p">][</span><span class="mi">0</span><span class="p">];</span>
+  <span class="n">fds</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">process</span><span class="p">.</span><span class="n">pipes</span><span class="p">[</span><span class="n">PIPE_STDERR</span><span class="p">][</span><span class="mi">0</span><span class="p">];</span>
 </pre></div></td>
         </tr>
       
@@ -1743,10 +1749,58 @@ is okay. Unless we get a scram, but that is fine too.</p></td>
 
     <span class="n">channels</span><span class="p">[</span><span class="n">REAPER</span><span class="p">].</span><span class="n">fd</span> <span class="o">=</span> <span class="n">process</span><span class="p">.</span><span class="n">pipes</span><span class="p">[</span><span class="n">PIPE_REAPER</span><span class="p">][</span><span class="mi">0</span><span class="p">];</span>
     <span class="n">channels</span><span class="p">[</span><span class="n">CANARY</span><span class="p">].</span><span class="n">fd</span> <span class="o">=</span> <span class="n">process</span><span class="p">.</span><span class="n">pipes</span><span class="p">[</span><span class="n">PIPE_CANARY</span><span class="p">][</span><span class="mi">0</span><span class="p">];</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>We're going to simply drain standard out and standard error of the plugin
+server process. We do not log the output. It would be just as reasonable
+to close the pipes, or ignore them, but we drain them as long as we have
+this loop to drain them with. </p></td>
+          <td class="code"><div class="highlight"><pre>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"></td>
+          <td class="code"><div class="highlight"><pre>
+    <span class="n">count</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">fds</span><span class="p">)</span> <span class="o">/</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">int</span><span class="p">);</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">channels</span><span class="p">[</span><span class="n">count</span><span class="p">].</span><span class="n">events</span> <span class="o">=</span> <span class="n">POLLIN</span> <span class="o">|</span> <span class="n">POLLHUP</span><span class="p">;</span>
+        <span class="n">channels</span><span class="p">[</span><span class="n">count</span><span class="p">].</span><span class="n">revents</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+        <span class="n">channels</span><span class="p">[</span><span class="n">count</span><span class="p">].</span><span class="n">fd</span> <span class="o">=</span> <span class="n">fds</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+        <span class="n">count</span><span class="o">++</span><span class="p">;</span>
+      <span class="p">}</span>
+    <span class="p">}</span>
 
     <span class="n">trace</span><span class="p">(</span><span class="s">&quot;reap&quot;</span><span class="p">,</span> <span class="s">&quot;poll&quot;</span><span class="p">);</span>
 
-    <span class="n">HANDLE_EINTR</span><span class="p">(</span><span class="n">poll</span><span class="p">(</span><span class="n">channels</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">timeout</span><span class="p">),</span> <span class="n">err</span><span class="p">);</span>
+    <span class="n">HANDLE_EINTR</span><span class="p">(</span><span class="n">poll</span><span class="p">(</span><span class="n">channels</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">timeout</span><span class="p">),</span> <span class="n">err</span><span class="p">);</span>
+</pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>Not terribly concerned about errors here. If we encounter them, we ignore
+the pipes, so problems flow back to the server process.</p>
+
+<p>TODO Test me. Write some junk to standard out.</p></td>
+          <td class="code"><div class="highlight"><pre>
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">count</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">revents</span> <span class="o">&amp;</span> <span class="n">POLLIN</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">HANDLE_EINTR</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">fd</span><span class="p">,</span> <span class="n">buffer</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">buffer</span><span class="p">)),</span> <span class="n">err</span><span class="p">);</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">err</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+          <span class="n">channels</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">revents</span> <span class="o">=</span> <span class="n">POLLHUP</span><span class="p">;</span>
+        <span class="p">}</span>
+      <span class="p">}</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">revents</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">POLLHUP</span> <span class="o">|</span> <span class="n">POLLERR</span> <span class="o">|</span> <span class="n">POLLNVAL</span><span class="p">))</span> <span class="p">{</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">j</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">j</span> <span class="o">&lt;</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">fds</span><span class="p">)</span> <span class="o">/</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">int</span><span class="p">);</span> <span class="n">j</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+          <span class="k">if</span> <span class="p">(</span><span class="n">fds</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">==</span> <span class="n">channels</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">fd</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">fds</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+          <span class="p">}</span>
+        <span class="p">}</span>
+      <span class="p">}</span>
+    <span class="p">}</span>
 </pre></div></td>
         </tr>
       
@@ -1760,13 +1814,11 @@ with the process monitoring pipes, we go to the shutdown state. </p></td>
         <tr>
           <td class="docs"><p>Did the monitored process terminate? </p></td>
           <td class="code"><div class="highlight"><pre>
-    <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">CANARY</span><span class="p">].</span><span class="n">revents</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">CANARY</span><span class="p">].</span><span class="n">revents</span> <span class="o">&amp;</span> <span class="n">POLLHUP</span><span class="p">)</span> <span class="p">{</span>
       <span class="n">trace</span><span class="p">(</span><span class="s">&quot;reap&quot;</span><span class="p">,</span> <span class="s">&quot;hangup&quot;</span><span class="p">);</span>
-      <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">CANARY</span><span class="p">].</span><span class="n">revents</span> <span class="o">==</span> <span class="n">POLLHUP</span><span class="p">)</span> <span class="p">{</span>
-        <span class="n">hangup</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-        <span class="n">set_error</span><span class="p">(</span><span class="n">REAPER_UNEXPECTED_CANARY_PIPE_EVENT</span><span class="p">);</span>
-      <span class="p">}</span>
+      <span class="n">hangup</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">CANARY</span><span class="p">].</span><span class="n">revents</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">set_error</span><span class="p">(</span><span class="n">REAPER_UNEXPECTED_CANARY_PIPE_EVENT</span><span class="p">);</span>
     <span class="p">}</span>
 </pre></div></td>
         </tr>
@@ -1774,48 +1826,46 @@ with the process monitoring pipes, we go to the shutdown state. </p></td>
         <tr>
           <td class="docs"><p>Did we get an instance number from the plugin stub? </p></td>
           <td class="code"><div class="highlight"><pre>
-    <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">REAPER</span><span class="p">].</span><span class="n">revents</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
-      <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">REAPER</span><span class="p">].</span><span class="n">revents</span> <span class="o">==</span> <span class="n">POLLIN</span><span class="p">)</span> <span class="p">{</span></pre></div></td>
+    <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">REAPER</span><span class="p">].</span><span class="n">revents</span> <span class="o">&amp;</span> <span class="n">POLLIN</span><span class="p">)</span> <span class="p">{</span></pre></div></td>
         </tr>
       
         <tr>
           <td class="docs"><p>Read the message from the user. </p></td>
           <td class="code"><div class="highlight"><pre>
-        <span class="n">HANDLE_EINTR</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">pipes</span><span class="p">[</span><span class="n">PIPE_REAPER</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">input</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">input</span><span class="p">)),</span> <span class="n">err</span><span class="p">);</span>
+      <span class="n">HANDLE_EINTR</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">process</span><span class="p">.</span><span class="n">pipes</span><span class="p">[</span><span class="n">PIPE_REAPER</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">input</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">input</span><span class="p">)),</span> <span class="n">err</span><span class="p">);</span>
 
-        <span class="k">if</span> <span class="p">(</span><span class="n">err</span> <span class="o">!=</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">input</span><span class="p">))</span> <span class="p">{</span></pre></div></td>
+      <span class="k">if</span> <span class="p">(</span><span class="n">err</span> <span class="o">!=</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">input</span><span class="p">))</span> <span class="p">{</span></pre></div></td>
         </tr>
       
         <tr>
           <td class="docs"><p>Any error reading the instance pipe means we shutdown for good. </p></td>
           <td class="code"><div class="highlight"><pre>
-          <span class="k">if</span> <span class="p">(</span><span class="n">err</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
-            <span class="n">set_error</span><span class="p">(</span><span class="n">REAPER_CANNOT_READ_REAPER_PIPE</span><span class="p">);</span>
-          <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-            <span class="n">set_error</span><span class="p">(</span><span class="n">REAPER_TRUNCATED_READ_REAPER_PIPE</span><span class="p">);</span>
-          <span class="p">}</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">err</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+          <span class="n">set_error</span><span class="p">(</span><span class="n">REAPER_CANNOT_READ_REAPER_PIPE</span><span class="p">);</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+          <span class="n">set_error</span><span class="p">(</span><span class="n">REAPER_TRUNCATED_READ_REAPER_PIPE</span><span class="p">);</span>
+        <span class="p">}</span>
 
-        <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
-          <span class="n">trace</span><span class="p">(</span><span class="s">&quot;reap&quot;</span><span class="p">,</span> <span class="s">&quot;shutdown&quot;</span><span class="p">);</span>
-          <span class="n">shutdown</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-        <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">instance</span><span class="p">)</span> <span class="p">{</span></pre></div></td>
+      <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">trace</span><span class="p">(</span><span class="s">&quot;reap&quot;</span><span class="p">,</span> <span class="s">&quot;shutdown&quot;</span><span class="p">);</span>
+        <span class="n">shutdown</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+      <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">instance</span><span class="p">)</span> <span class="p">{</span></pre></div></td>
         </tr>
       
         <tr>
           <td class="docs"><p>We will restart if we get an instance number higher than the static
 instance number. If we get a <code>-1</code> we shutdown. </p></td>
           <td class="code"><div class="highlight"><pre>
-          <span class="n">trace</span><span class="p">(</span><span class="s">&quot;reap&quot;</span><span class="p">,</span> <span class="s">&quot;instance&quot;</span><span class="p">);</span>
-          <span class="n">instance</span> <span class="o">=</span> <span class="n">input</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span></pre></div></td>
+        <span class="n">trace</span><span class="p">(</span><span class="s">&quot;reap&quot;</span><span class="p">,</span> <span class="s">&quot;instance&quot;</span><span class="p">);</span>
+        <span class="n">instance</span> <span class="o">=</span> <span class="n">input</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span></pre></div></td>
         </tr>
       
         <tr>
           <td class="docs"></td>
           <td class="code"><div class="highlight"><pre>
-        <span class="p">}</span>
-      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-        <span class="n">set_error</span><span class="p">(</span><span class="n">REAPER_UNEXPECTED_REAPER_PIPE_EVENT</span><span class="p">);</span>
       <span class="p">}</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">channels</span><span class="p">[</span><span class="n">REAPER</span><span class="p">].</span><span class="n">revents</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">set_error</span><span class="p">(</span><span class="n">REAPER_UNEXPECTED_REAPER_PIPE_EVENT</span><span class="p">);</span>
     <span class="p">}</span>
 </pre></div></td>
         </tr>
@@ -2083,9 +2133,9 @@ orderly restart. Do not reset shutdown here, only stopped. </p></td>
         </tr>
       
         <tr>
-          <td class="docs"><p>Call abend. </p></td>
+          <td class="docs"><p>Call the starter to restarter the server process. </p></td>
           <td class="code"><div class="highlight"><pre>
-    <span class="n">process</span><span class="p">.</span><span class="n">abend</span><span class="p">();</span>
+    <span class="n">process</span><span class="p">.</span><span class="n">starter</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
 </pre></div></td>
         </tr>
       
@@ -2256,7 +2306,7 @@ the reaper process is send the instance number through the instance pipe.</p></t
           <td class="docs"><p>&#9824; </p></td>
           <td class="code"><div class="highlight"><pre>
 <span class="k">static</span> <span class="kt">int</span> <span class="nf">retry</span><span class="p">(</span><span class="kt">int</span> <span class="n">milliseconds</span><span class="p">)</span> <span class="p">{</span>
-  <span class="kt">int</span> <span class="n">err</span><span class="p">,</span> <span class="o">*</span><span class="n">instance</span><span class="p">,</span> <span class="n">terminate</span><span class="p">,</span> <span class="n">message</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+  <span class="kt">int</span> <span class="n">err</span><span class="p">,</span> <span class="o">*</span><span class="n">instance</span><span class="p">,</span> <span class="n">terminate</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">message</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
 </pre></div></td>
         </tr>
       
@@ -2283,7 +2333,8 @@ with the thread local key will free the pointer at thread exit. </p></td>
           <td class="docs"><p>Dip into our mutex. </p></td>
           <td class="code"><div class="highlight"><pre>
   <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="n">pthread_mutex_lock</span><span class="p">(</span><span class="o">&amp;</span><span class="n">process</span><span class="p">.</span><span class="n">mutex</span><span class="p">);</span>
-</pre></div></td>
+
+  <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;Process instance is %d and %d term %d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">process</span><span class="p">.</span><span class="n">instance</span><span class="p">,</span> <span class="o">*</span><span class="n">instance</span><span class="p">,</span> <span class="n">terminate</span><span class="p">);</span></pre></div></td>
         </tr>
       
         <tr>
@@ -2308,6 +2359,7 @@ mutex. </p></td>
           <td class="docs"></td>
           <td class="code"><div class="highlight"><pre>
   <span class="p">}</span>
+  <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;Process instance is %d and %d term %d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">process</span><span class="p">.</span><span class="n">instance</span><span class="p">,</span> <span class="o">*</span><span class="n">instance</span><span class="p">,</span> <span class="n">terminate</span><span class="p">);</span>
 </pre></div></td>
         </tr>
       
@@ -2683,7 +2735,6 @@ pipes. </p></td>
 <span class="p">{</span> <span class="n">initalize</span>
 <span class="p">,</span> <span class="n">start</span>
 <span class="p">,</span> <span class="n">ready</span>
-<span class="p">,</span> <span class="n">stdio</span>
 <span class="p">,</span> <span class="n">retry</span>
 <span class="p">,</span> <span class="n">shutdown</span>
 <span class="p">,</span> <span class="n">done</span>

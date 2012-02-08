@@ -33,6 +33,11 @@ time to read the documentation, I can't read it to you. If you were to email
 me directly, I might type out something just about as long. But, please, do
 ask questions, and suggest documentation patches if this is confusing.</p>
 
+<p>&mdash;</p>
+
+<p><em>Now Helicon must needs pour forth for me, And with her choir Urania must
+assist me, To put in verse things difficult to think.</em> &mdash; Dante</p>
+
 <h2>Origins</h2>
 
 <p>The plugin attendant was written for use in an
@@ -345,6 +350,47 @@ must not signal our process.</p></td>
 <span class="cp">#else</span>
 <span class="k">typedef</span> <span class="kt">int</span> <span class="n">attendant__pipe_t</span><span class="p">;</span>
 <span class="cp">#endif</span>
+
+<span class="k">struct</span> <span class="n">attendant__initializer</span> <span class="p">{</span>
+  <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">starter</span><span class="p">)(</span><span class="kt">int</span> <span class="n">restart</span><span class="p">);</span>
+  <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">connector</span><span class="p">)(</span><span class="n">attendant__pipe_t</span> <span class="n">in</span><span class="p">,</span> <span class="n">attendant__pipe_t</span> <span class="n">out</span><span class="p">);</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>The full path to the plugin attendant relay program. This program will
+ensure that all file handles are closed and signal handlers reset. It the
+responsibility of the plugin developer to distribute the relay program and
+make it available to the plugin attendnat. </p></td>
+          <td class="code"><div class="highlight"><pre>
+  <span class="kt">char</span> <span class="n">relay</span><span class="p">[</span><span class="n">FILENAME_MAX</span><span class="p">];</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="cp">#ifndef _WIN32</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>The file descriptor number for the plugin server process side of the canary
+pipe. Must not conflict with the file descriptor numbers assinged to
+standard I/O by the operating system. The plugin developer has the option
+to specify the file descriptor number to avoid any conflicts. If you don't
+care, then make an arbitrary decision. </p></td>
+          <td class="code"><div class="highlight"><pre><span class="cp"></span>
+  <span class="n">attendant__pipe_t</span> <span class="n">canary</span><span class="p">;</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"></td>
+          <td class="code"><div class="highlight"><pre>
+<span class="cp">#endif</span></pre></div></td>
+        </tr>
+      
+        <tr>
+          <td class="docs"><p>&mdash; </p></td>
+          <td class="code"><div class="highlight"><pre><span class="cp"></span>
+<span class="p">};</span>
 </pre></div></td>
         </tr>
       
@@ -368,7 +414,9 @@ code.</p></td>
         <tr>
           <td class="docs"><p><code>initialize</code> &mdash; This must be called to initialize the the monitor
 before any other functions are called. Call <code>initialize</code> during the global
-initialization of your library, followed by the initial call to <code>start</code>.</p></td>
+initialization of your library, followed by the initial call to <code>start</code>.</p>
+
+<p>TODO Re-docco.</p></td>
           <td class="code"><div class="highlight"><pre>
 </pre></div></td>
         </tr>
@@ -376,32 +424,7 @@ initialization of your library, followed by the initial call to <code>start</cod
         <tr>
           <td class="docs"><p>&#9824; </p></td>
           <td class="code"><div class="highlight"><pre>
-  <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="n">initialize</span><span class="p">)(</span></pre></div></td>
-        </tr>
-      
-        <tr>
-          <td class="docs"><p>The full path to the plugin attendant relay program. This program will
-ensure that all file handles are closed and signal handlers reset. It the
-responsibility of the plugin developer to distribute the relay program
-and make it available to the plugin attendnat. </p></td>
-          <td class="code"><div class="highlight"><pre>
-    <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">relay</span><span class="p">,</span></pre></div></td>
-        </tr>
-      
-        <tr>
-          <td class="docs"><p>The file descriptor number for the plugin server process side of the
-canary pipe. Must not conflict with the file descriptor numbers assinged
-to standard I/O by the operating system. The plugin developer has the
-option to specify the file descriptor number to avoid any conflicts. If
-you don't care, then make an arbitrary decision. </p></td>
-          <td class="code"><div class="highlight"><pre>
-    <span class="kt">int</span> <span class="n">fd</span></pre></div></td>
-        </tr>
-      
-        <tr>
-          <td class="docs"><p>&mdash; </p></td>
-          <td class="code"><div class="highlight"><pre>
-  <span class="p">);</span>
+  <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="n">initialize</span><span class="p">)(</span><span class="k">struct</span> <span class="n">attendant__initializer</span> <span class="o">*</span><span class="n">initializer</span><span class="p">);</span>
 </pre></div></td>
         </tr>
       
@@ -427,7 +450,9 @@ mutex.</p>
 
 <p>After the plugin attendant enters the shutdown state, it cannot be
 restarted. See the <code>shutdown</code> function for more details on the shutdown
-state.</p></td>
+state.</p>
+
+<p>TODO Re-docco.</p></td>
           <td class="code"><div class="highlight"><pre>
 </pre></div></td>
         </tr>
@@ -447,13 +472,7 @@ state.</p></td>
         <tr>
           <td class="docs"><p>A null terminated array of program arguments. </p></td>
           <td class="code"><div class="highlight"><pre>
-    <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">argv</span><span class="p">[],</span></pre></div></td>
-        </tr>
-      
-        <tr>
-          <td class="docs"><p>The function to call when the plugin server process exits unexpectedly. </p></td>
-          <td class="code"><div class="highlight"><pre>
-    <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">abend</span><span class="p">)()</span></pre></div></td>
+    <span class="kt">char</span> <span class="k">const</span><span class="o">*</span> <span class="n">argv</span><span class="p">[]</span></pre></div></td>
         </tr>
       
         <tr>
@@ -498,34 +517,6 @@ due to a catastrophic error, such a missing plugin server program file.</p></td>
           <td class="docs"><p>&#9824; </p></td>
           <td class="code"><div class="highlight"><pre>
   <span class="kt">int</span> <span class="p">(</span><span class="o">*</span><span class="n">ready</span><span class="p">)();</span>
-</pre></div></td>
-        </tr>
-      
-        <tr>
-          <td class="docs"><p><code>pipe</code> &mdash; You can obtain handles to standard input, output and error.
-The pipe file descriptors or handles will remain consistant across
-restarts.</p>
-
-<p>The pipe is obtained by an index number. These numbers are constistant
-across platforms regardless of the file descriptors assigned by the
-operating system. They are 0 for stdin, 1 for stdout, and 2 for stderr.</p>
-
-<p>The plugin attendant does not provide a protocol for communication between
-the plugin stub and the plugin server process. Devise one to suit the needs
-of your plugin using the IPC facilities of the operating system.</p>
-
-<p>Between these pipes and the program arguments you ought to have enough IPC
-to connect your plugin stub to your plugin server process to bootstrap
-other forms of IPC. Standard I/O might be all you need if your needs are
-simple enough.</p></td>
-          <td class="code"><div class="highlight"><pre>
-</pre></div></td>
-        </tr>
-      
-        <tr>
-          <td class="docs"><p>&#9824; </p></td>
-          <td class="code"><div class="highlight"><pre>
-  <span class="n">attendant__pipe_t</span> <span class="p">(</span><span class="o">*</span><span class="n">stdio</span><span class="p">)(</span><span class="kt">int</span> <span class="n">num</span><span class="p">);</span>
 </pre></div></td>
         </tr>
       
