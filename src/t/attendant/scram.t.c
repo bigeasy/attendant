@@ -9,71 +9,45 @@
 #include "../ok.h"
 #include "../../../eintr.h"
 
-void abend() { }
+static int count = 0;
 
-static char * expected[] = {
-  "[initialize/success]",
-  "[start/success]",
-  "[launch/fork]",
-  "[launch/success]",
-  "[reap/poll]",
-  "[ready/exit]",
-  "[reap/shutdown]",
-  "[reap/poll]",
-  "[shutdown/exit]",
-  "[done/exit]", 
-  "[shutdown/exit]",
-  "[scram/initiated]",
-  "[reap/shutdown]",
-  "[reap/poll]",
-  "[reap/instance]",
-  "[reap/poll]",
-  "[reap/hangup]",
-  "[reap/hungup]",
-  "[done/exit]",
-  NULL
-};
-
-void trace_ok(char **trace, char **expected, char *message) {
-  int matched = 1, i;
-  for (i = 0; matched && trace[i]; i++) {
-    if ((matched = ! ! expected[i])) {
-      matched = (strcmp(trace[i], expected[i]) == 0);
-    } 
-  }
-
-  matched = matched && ! expected[i];
-
-  ok(matched, message);
-  
-  if (! matched) {
-    printf("# EXPECTED:\n");
-    for (i = 0; expected[i]; i++) {
-      printf("# %s\n", expected[i]);
-    }
-    printf("# GOT:\n");
-    for (i = 0; trace[i]; i++) {
-      printf("# %s\n", trace[i]);
-    }
+void starter(int restart) {
+  char path[PATH_MAX];
+  char const * argv[] = { NULL };
+  if (count++ < 3) {
+    attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/when"), argv);
   }
 }
 
+static char fifo[PATH_MAX];
+
+void connector(attendant__pipe_t in, attendant__pipe_t out) {
+  const char *pipe = "pipe\n";
+  int err;
+  HANDLE_EINTR(write(in, pipe, strlen(pipe)), err);
+  ok(err != -1, "request pipe");
+  HANDLE_EINTR(read(out, fifo, sizeof(fifo)), err);
+  fifo[strlen(fifo) - 1] = '\0';
+  ok(err != -1, "get pipe # %s", fifo);
+}
+
 int main() {
-  char path[PATH_MAX], **trace;
-  char const * argv[] = { NULL };
+  struct attendant__initializer initializer;
 
   printf("1..3\n");
 
-  attendant.initialize(strcat(getcwd(path, PATH_MAX), "/relay"), 31);  
-  attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/server"), argv, abend);
+  initializer.starter = starter;
+  initializer.connector = connector;
+  strcat(getcwd(initializer.relay, sizeof(initializer.relay)), "/relay");
+  initializer.canary = 31;
+
+  attendant.initialize(&initializer);
+  starter(0);
   attendant.ready();
   attendant.shutdown();
   ok(! attendant.done(250), "can't exit");
   attendant.scram();
   ok(attendant.done(-1), "done");
-
-  trace = attendant.tracepoints();
-  trace_ok(trace, expected, "scram");
 
   attendant.destroy();  
 

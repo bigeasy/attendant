@@ -10,20 +10,24 @@
 #include "../ok.h"
 #include "../../../eintr.h"
 
-void abend() {
+void starter(int restart) {
   struct attendant__errors errors = attendant.errors();
   ok(errors.attendant == RELAY_CANNOT_EXEC, "relay cannot exec");
   ok(errors.system == ENOENT, "enoent");
 }
 
 int main() {
-  char path[PATH_MAX], **trace;
-  int err;
+  char path[PATH_MAX];
   char const * argv[] = { NULL };
+  struct attendant__initializer initializer;
+
+  initializer.starter = starter;
+  strcat(getcwd(initializer.relay, PATH_MAX), "/relay-x");
+  initializer.canary = 31;
 
   printf("1..2\n");
-  attendant.initialize(strcat(getcwd(path, PATH_MAX), "/relay"), 31);  
-  err = attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/server-x"), argv, abend);
+  attendant.initialize(&initializer);
+  attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/server-x"), argv);
   attendant.ready();
   attendant.destroy();  
 

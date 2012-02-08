@@ -1,6 +1,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,11 +11,26 @@
 #include "../ok.h"
 #include "../../../eintr.h"
 
-/* The server process restarter. */
-void abend() {
+static int count = 0;
+
+void starter(int restart) {
   char path[PATH_MAX];
   char const * argv[] = { NULL };
-  attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/when"), argv, abend);
+  if (count++ < 3) {
+    attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/when"), argv);
+  }
+}
+
+static char fifo[PATH_MAX];
+
+void connector(attendant__pipe_t in, attendant__pipe_t out) {
+  const char *pipe = "pipe\n";
+  int err;
+  HANDLE_EINTR(write(in, pipe, strlen(pipe)), err);
+  ok(err != -1, "request pipe");
+  HANDLE_EINTR(read(out, fifo, sizeof(fifo)), err);
+  fifo[strlen(fifo) - 1] = '\0';
+  ok(err != -1, "get pipe # %s", fifo);
 }
 
 struct retry {
@@ -22,100 +38,104 @@ struct retry {
   int count;
 };
 
+void send(const char *message) {
+  int fd, err;
+  fd = open(fifo, O_WRONLY);
+  if (fd == -1) {
+    bail("cannot open fifo");
+  }
+  HANDLE_EINTR(write(fd, message, strlen(message)), err);
+  if (err == -1) {
+    bail("cannot write fifo");
+  }
+  err = close(fd);
+  if (err == -1) {
+    bail("cannot close fifo");
+  }
+}
+
+void recv(char *buffer, int length) {
+  int fd, err;
+  fd = open(fifo, O_RDONLY);
+  if (fd == -1) {
+    bail("cannot open fifo for read");
+  }
+  HANDLE_EINTR(read(fd, buffer, length), err);
+  if (err == -1) {
+    bail("cannot write fifo");
+  }
+  err = close(fd);
+  if (err == -1) {
+    bail("cannot close fifo");
+  }
+}
+
 /* We run this thread twice. The second time will cause the retry loop to fire
  * more than twice. */
 static void* retry(void *data) {
   struct retry *retry = (struct retry*) data;
   const char* name = retry->name;
-  int count = 0, pinged = 0, err;
-  char first[64], second[64], *ping = "ping\n", *close = "close\n";
+  int count = 0;
+  char first[64], second[64], *ping = "ping\n";
 
   /* Ping the plugin server process to get its start time. */
-  HANDLE_EINTR(write(attendant.stdio(0), ping, strlen(ping)), err);
-  ok(err != -1, "write ping of %s thread", name);
+  send(ping);
   memset(first, 0, sizeof(first));
-  HANDLE_EINTR(read(attendant.stdio(1), first, sizeof(first)), err);
-  ok(err != -1, "read ping of %s thread", name);
+  recv(first, sizeof(first));
 
   /* Ping the plugin server process to get its start time again. */
-  HANDLE_EINTR(write(attendant.stdio(0), ping, strlen(ping)), err);
-  ok(err != -1, "write confirm ping of %s thread", name);
+  send(ping);
   memset(second, 0, sizeof(second));
-  HANDLE_EINTR(read(attendant.stdio(1), second, sizeof(second)), err);
-  ok(err != -1, "read confirm ping of %s thread", name);
+  recv(second, sizeof(second));
+
+  fprintf(stderr, "Starting.\n");
 
   /* Sanity check to ensure that the server process correctly reports the same
    * start time when it runs uninterrupted. */
   ok(strcmp(first, second) == 0, "running from %s thread", name);
 
-  /* Tell the server to close stdandard out. */
-  HANDLE_EINTR(write(attendant.stdio(0), close, strlen(close)), err);
-
-  /* Sleep to ensure that the close actually happens. */
-  sleep(1);
-
-  /* Now simulate IPC using standard I/O. In a real plugin, we'd use an
-   * alternative form of IPC.
-   * 
-   * Here we run the above ping, but against a server process that closed
-   * standard out. We will get an `EPIPE`. The attendant will not know that IPC
-   * failed, it can only detect program exit. We will detect that IPC has failed
-   * and request that we force a restart of the server process.
-   */
-  while (attendant.ready() && ! pinged) {
+  while (attendant.ready() && strcmp(first, second) == 0) {
     count++;
-    HANDLE_EINTR(write(attendant.stdio(0), ping, strlen(ping)), err);
-    if (err == -1) {
-      if (errno == EPIPE) {
-        attendant.retry(1000);
-        continue;
-      }
-      printf("Bail out! Can't write to server.");
-      exit(1);
-    }
+    fprintf(stderr, "Retry %d.\n", count);
+    attendant.retry(1000);
+    send(ping);
     memset(second, 0, sizeof(second));
-    HANDLE_EINTR(read(attendant.stdio(1), second, sizeof(second)), err);
-    if (err == 0) {
-      attendant.retry(1000);
-    } else {
-      pinged = 1;
-    }
+    recv(second, sizeof(second));
+    fprintf(stderr, "%s", second);
   }
 
   /* By now we should have restarted. */
   ok(strcmp(first, second) != 0, "restarted from %s thread", name);
-  ok(count == retry->count, "retry count correct in %s thread", name);
+  ok(count == retry->count, "retry count correct in %s thread %d", name, count);
+
+  return NULL;
 }
 
 /* Run the above test twice, in two separate threads. The second run ought to
  * call retry twice, because its instance number will be less than the process
  * instance number. */
 int main() {
-  int err;
   struct retry expected;
-  char path[PATH_MAX], *term = "exit\n";
-  char const * argv[] = { NULL };
-  struct sigaction sigpipe;
+  const char *term = "exit\n";
   pthread_t thread;
-
-  /* We might write to a closed pipe when we kill the server process. We set
-   * `SIGPIPE` to ignore so that writing to a closed pipe will return `EIPE`
-   * instead of generating a signal. */
-  memset(&sigpipe, 0, sizeof(sigpipe));
-  sigpipe.sa_handler = SIG_IGN;
-  sigaction(SIGPIPE, &sigpipe, NULL);
+  struct attendant__initializer initializer;
 
   printf("1..14\n");
 
+  initializer.starter = starter;
+  initializer.connector = connector;
+  strcat(getcwd(initializer.relay, sizeof(initializer.relay)), "/relay");
+  initializer.canary = 31;
+
   /* Initialize the attendant. */
-  attendant.initialize(strcat(getcwd(path, PATH_MAX), "/relay"), 31);  
+  attendant.initialize(&initializer);
 
   /* Start the server. */
-  abend();
+  starter(0);
   attendant.ready();
 
   expected.name = "first";
-  expected.count = 2;
+  expected.count = 1;
   retry(&expected);
 
   expected.name = "second";
@@ -125,8 +145,7 @@ int main() {
 
   /* Shutdown the server. */
   attendant.shutdown();
-  HANDLE_EINTR(write(attendant.stdio(0), term, strlen(term)), err);
-  ok(err != -1, "send exit");
+  send(term);
 
   /* Wait for shutdown. */
   ok(attendant.done(1000), "done");

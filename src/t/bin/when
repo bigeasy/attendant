@@ -1,17 +1,40 @@
 #!/bin/bash
 
+sleep 2
+
 when=$(date)
+dir=$(/usr/bin/dirname $0)
+
+if [ ! -e "$dir/pipe" ]; then
+    /usr/bin/mkfifo "$dir/pipe"
+fi
+
 while read line
 do
     case "$line" in
-        exit)
+        pipe)
+            echo "$dir/pipe"
             break
             ;;
         close)
             exec 1>&-
             ;;
-        ping)
-            echo $when 
+        *)
+            echo "$line"
             ;;
     esac
+done
+
+while true
+do
+    if read line < "$dir/pipe"; then
+        case "$line" in
+            exit)
+                break
+                ;;
+            ping)
+                echo $when > "$dir/pipe"
+                ;;
+        esac
+    fi
 done

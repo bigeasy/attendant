@@ -175,10 +175,15 @@
  *
  * And no, don't just make a variable volatile and think that will cover it. It
  * needs to be gaurded by a mutex to flush memory accross CPU cores.
+ *
+ * TODO Re-docco.
  */
 
 /* &#9824; */
-typedef void (*abend_handler_t)();
+typedef void (*starter_t)(int restart);
+
+/* TODO Document. */
+typedef void (*connector_t)(attendant__pipe_t in, attendant__pipe_t out);
 
 /* ### Global State
  *
@@ -228,8 +233,10 @@ struct process {
   /* The file descriptor inherited by server process that when closed indicates
    * that the server process has died. */
   int canary;
-  /* User supplied unexpected exit handler. */
-  abend_handler_t abend;
+  /* User supplied server progress program start. */
+  starter_t starter;
+  /* User supplied plugin stub to server process IPC initialization. */
+  connector_t connector;
   /* SIGCHLD is not SIG_IGN so waitpid will block on specific pid. */
   short waitable;
   /* The process pid. */
@@ -328,24 +335,6 @@ static struct process process;
 /* &mdash; */
 #define PIPE_REAPER   6
 
-/* `stdio` &mdash; The standard I/O pipes do not change during the life time of
- * the plugin attendant. They are preserved across restarts by duping the parent
- * end file descriptors of a newly allocated pipe to the parent end file
- * descriptors of the previous pipe.  You can cache these values.
- *
- * Because the system calls are thread safe, there is no need for
- * synchronization when reading or writing to a pipe. There are other issues to
- * sort out for the plugin developer, regarding multiplexing.
- *
- * We reassign the parent end file descriptor using dup2.
- */
-
-/* &#9824; */
-static attendant__pipe_t stdio(int pipe)
-{
-  return process.pipes[pipe][pipe == 0 ? 1 : 0];
-}
-
 /* Process is one static structure, one process launched per library. It would
  * be easy enough to make this an API that has a handle, but if you did want to
  * run and watch a handful of server processes, it would better to make the
@@ -371,6 +360,7 @@ void trace(const char* function, const char* point) {
     /* At times, I'll insert a `fprintf(stderr, "%s\n", buffer);` right here to
      * see what's happening as it happens.
      */
+    //fprintf(stderr, "%s\n", buffer);
     process.trace.points[process.trace.count++] = strdup(buffer);
   }
   (void) pthread_mutex_unlock(&process.trace.mutex);
@@ -424,17 +414,24 @@ static void set_error(int error) {
  */
 
 /* &#9824; */
-static int initalize(const char *relay, int canary)
+static int initalize(struct attendant__initializer *initializer)
 {
   struct sigaction sigchld;
   pthread_condattr_t attr;
   int i, pipeno, err;
 
+  /* Otherwise, what's the point? */
+  FAIL(initializer->starter == NULL, INITIALIZE_STARTER_REQUIRED, fail);
+  process.starter = initializer->starter;
+
+  FAIL(initializer->connector == NULL, INITIALIZE_CONNECTOR_REQUIRED, fail);
+  process.connector = initializer->connector;
+
   /* The user gets to chose the canary file descriptor on UNIX. */
-  process.canary = canary;
+  process.canary = initializer->canary;
 
   /* Take note of the location of the relay program. */
-  process.relay = strdup(relay);
+  process.relay = strdup(initializer->relay);
 
   /* Initialize the pipes to -1, so we know that they are not open. */
   for (i = PIPE_STDIN; i <= PIPE_REAPER; i++) {
@@ -673,14 +670,10 @@ static void close_pipes() {
  */
 
 /* &mdash; */
-static int start(const char* path, char const* argv[], abend_handler_t abend)
+static int start(const char* path, char const* argv[])
 {
   int err, argc, i, running;
   size_t size;
-
-  /* Otherwise, what's the point? */
-  FAIL(abend == NULL, START_ABEND_REQUIRED, fail);
-  process.abend = abend;
 
   /* Assert that we're not being called while the one and only plugin server
    * process is already running. You're not calling the addendant functions in
@@ -982,6 +975,10 @@ static void *launch(void *data)
     goto fail;
   }
 
+  /* Call the application developer provided connector to initiate the plugin
+   * stub to plugin server process IPC. */
+  process.connector(process.pipes[PIPE_STDIN][1], process.pipes[PIPE_STDOUT][0]);
+
   /* Our server process is now up and running correctly. Time to launch the
    * reaper thread. This reaper thread monitor the plugin server process for
    * termination. */
@@ -1042,8 +1039,12 @@ static void* reap(void *data)
   static int REAPER = 0, CANARY = 1;
   int input[2], instance = 0,
     sig = SIGTERM, timeout = -1, hangup = 0, shutdown = 0;
-  int status, err;
-  struct pollfd channels[2];
+  int status, err, fds[2], i, j, count;
+  struct pollfd channels[4];
+  char buffer[2048];
+
+  fds[0] = process.pipes[PIPE_STDOUT][0];
+  fds[1] = process.pipes[PIPE_STDERR][0];
 
   /* Join the reaper launcher. We do not need the result. */
   pthread_join(process.launcher, NULL);
@@ -1088,50 +1089,83 @@ static void* reap(void *data)
     channels[REAPER].fd = process.pipes[PIPE_REAPER][0];
     channels[CANARY].fd = process.pipes[PIPE_CANARY][0];
 
+    /* We're going to simply drain standard out and standard error of the plugin
+     * server process. We do not log the output. It would be just as reasonable
+     * to close the pipes, or ignore them, but we drain them as long as we have
+     * this loop to drain them with. */
+
+    /* */
+    count = 2;
+    for (i = 0; i < sizeof(fds) / sizeof(int); i++) {
+      if (fds[i] != -1) {
+        channels[count].events = POLLIN | POLLHUP;
+        channels[count].revents = 0;
+        channels[count].fd = fds[i];
+        count++;
+      }
+    }
+
     trace("reap", "poll");
 
-    HANDLE_EINTR(poll(channels, 2, timeout), err);
+    HANDLE_EINTR(poll(channels, count, timeout), err);
+
+    /* Not terribly concerned about errors here. If we encounter them, we ignore
+     * the pipes, so problems flow back to the server process.
+     *
+     * TODO Test me. Write some junk to standard out.
+     */
+    for (i = 2; i < count; i++) {
+      if (channels[i].revents & POLLIN) {
+        HANDLE_EINTR(read(channels[i].fd, buffer, sizeof(buffer)), err);
+        if (err == -1) {
+          channels[i].revents = POLLHUP;
+        }
+      }
+      if (channels[i].revents & (POLLHUP | POLLERR | POLLNVAL)) {
+        for (j = 0; j < sizeof(fds) / sizeof(int); j++) {
+          if (fds[j] == channels[i].fd) {
+            fds[j] = -1;
+          }
+        }
+      }
+    }
 
     /* Note that, errors here make the situation hopeless. If we encouter errors
      * with the process monitoring pipes, we go to the shutdown state. */
 
     /* Did the monitored process terminate? */
-    if (channels[CANARY].revents != 0) {
+    if (channels[CANARY].revents & POLLHUP) {
       trace("reap", "hangup");
-      if (channels[CANARY].revents == POLLHUP) {
-        hangup = 1;
-      } else {
-        set_error(REAPER_UNEXPECTED_CANARY_PIPE_EVENT);
-      }
+      hangup = 1;
+    } else if (channels[CANARY].revents != 0) {
+      set_error(REAPER_UNEXPECTED_CANARY_PIPE_EVENT);
     }
 
     /* Did we get an instance number from the plugin stub? */
-    if (channels[REAPER].revents != 0) {
-      if (channels[REAPER].revents == POLLIN) {
-        /* Read the message from the user. */
-        HANDLE_EINTR(read(process.pipes[PIPE_REAPER][0], input, sizeof(input)), err);
+    if (channels[REAPER].revents & POLLIN) {
+      /* Read the message from the user. */
+      HANDLE_EINTR(read(process.pipes[PIPE_REAPER][0], input, sizeof(input)), err);
 
-        if (err != sizeof(input)) {
-          /* Any error reading the instance pipe means we shutdown for good. */
-          if (err == -1) {
-            set_error(REAPER_CANNOT_READ_REAPER_PIPE);
-          } else {
-            set_error(REAPER_TRUNCATED_READ_REAPER_PIPE);
-          }
-
-        } else if (input[0] == -1) {
-          trace("reap", "shutdown");
-          shutdown = 1;
-        } else if (input[0] > instance) {
-          /* We will restart if we get an instance number higher than the static
-           * instance number. If we get a `-1` we shutdown. */
-          trace("reap", "instance");
-          instance = input[0];
-          /* */
+      if (err != sizeof(input)) {
+        /* Any error reading the instance pipe means we shutdown for good. */
+        if (err == -1) {
+          set_error(REAPER_CANNOT_READ_REAPER_PIPE);
+        } else {
+          set_error(REAPER_TRUNCATED_READ_REAPER_PIPE);
         }
-      } else {
-        set_error(REAPER_UNEXPECTED_REAPER_PIPE_EVENT);
+
+      } else if (input[0] == -1) {
+        trace("reap", "shutdown");
+        shutdown = 1;
+      } else if (input[0] > instance) {
+        /* We will restart if we get an instance number higher than the static
+         * instance number. If we get a `-1` we shutdown. */
+        trace("reap", "instance");
+        instance = input[0];
+        /* */
       }
+    } else if (channels[REAPER].revents != 0) {
+      set_error(REAPER_UNEXPECTED_REAPER_PIPE_EVENT);
     }
 
     /* If we're getting unexpected errors from reading the pipes, we've entered
@@ -1286,8 +1320,8 @@ static void signal_termination() {
 
   /* If we've decided to try a restart, call the abend handler. */
   if (process.restarting) {
-    /* Call abend. */
-    process.abend();
+    /* Call the starter to restarter the server process. */
+    process.starter(1);
 
     /* If the abend handler did not call start, then it has decided to shutdown.
      * We are no longer restarting, and we can signal a process state change to
@@ -1429,7 +1463,7 @@ static int ready() {
 
 /* &#9824; */
 static int retry(int milliseconds) {
-  int err, *instance, terminate, message[2];
+  int err, *instance, terminate = 0, message[2];
 
   /* Get the current value of the thread local instance. */
   instance = ((int*) pthread_getspecific(process.key)); 
@@ -1445,6 +1479,7 @@ static int retry(int milliseconds) {
   /* Dip into our mutex. */
   (void) pthread_mutex_lock(&process.mutex);
 
+  fprintf(stderr, "Process instance is %d and %d term %d\n", process.instance, *instance, terminate);
   /* If the process instance equals our thread local instance and the process is
    * running, then we are the first stub thread to report that this instance has
    * died. */
@@ -1457,6 +1492,7 @@ static int retry(int milliseconds) {
     terminate = 1;
     /* */
   }
+  fprintf(stderr, "Process instance is %d and %d term %d\n", process.instance, *instance, terminate);
 
   /* Undip. */
   (void) pthread_mutex_unlock(&process.mutex);
@@ -1699,7 +1735,6 @@ struct attendant attendant =
 { initalize
 , start
 , ready
-, stdio
 , retry
 , shutdown
 , done

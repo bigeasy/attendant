@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <errno.h>
+#include <string.h>
 
 #include "ok.h"
 
@@ -15,6 +17,6 @@ void ok(int cond, char const *format, ...) {
 }
 
 void bail(const char* message) {
-  printf("Bail Out! %s\n", message);
+  printf("Bail out! %s %s\n", message, strerror(errno));
   exit(EXIT_FAILURE);
 }

@@ -311,6 +311,27 @@ typedef HANDLE attendant__pipe_t;
 typedef int attendant__pipe_t;
 #endif
 
+struct attendant__initializer {
+  void (*starter)(int restart);
+  void (*connector)(attendant__pipe_t in, attendant__pipe_t out);
+  /* The full path to the plugin attendant relay program. This program will
+   * ensure that all file handles are closed and signal handlers reset. It the
+   * responsibility of the plugin developer to distribute the relay program and
+   * make it available to the plugin attendnat. */
+  char relay[FILENAME_MAX];
+  /* */
+#ifndef _WIN32
+  /* The file descriptor number for the plugin server process side of the canary
+   * pipe. Must not conflict with the file descriptor numbers assinged to
+   * standard I/O by the operating system. The plugin developer has the option
+   * to specify the file descriptor number to avoid any conflicts. If you don't
+   * care, then make an arbitrary decision. */
+  attendant__pipe_t canary;
+  /* */
+#endif
+/* &mdash; */
+};
+
 /* There is one instance of the plugin attendant that monitors only one instance
  * of the plugin server process. The plugin attendant functions are contained
  * within a structure which emulates a namespace. The plugin attendant functions
@@ -324,23 +345,12 @@ struct attendant {
   /* `initialize` &mdash; This must be called to initialize the the monitor
    * before any other functions are called. Call `initialize` during the global
    * initialization of your library, followed by the initial call to `start`.
+   *
+   * TODO Re-docco.
    */
 
   /* &#9824; */
-  int (*initialize)(
-    /* The full path to the plugin attendant relay program. This program will
-     * ensure that all file handles are closed and signal handlers reset. It the
-     * responsibility of the plugin developer to distribute the relay program
-     * and make it available to the plugin attendnat. */
-    const char *relay,
-    /* The file descriptor number for the plugin server process side of the
-     * canary pipe. Must not conflict with the file descriptor numbers assinged
-     * to standard I/O by the operating system. The plugin developer has the
-     * option to specify the file descriptor number to avoid any conflicts. If
-     * you don't care, then make an arbitrary decision. */
-    int fd
-  /* &mdash; */
-  );
+  int (*initialize)(struct attendant__initializer *initializer);
 
   /* `start` &mdash; Called to start the plugin process server when the plugin
    * library is loaded. Also called from within the plugin developer provided
@@ -364,6 +374,8 @@ struct attendant {
    * After the plugin attendant enters the shutdown state, it cannot be
    * restarted. See the `shutdown` function for more details on the shutdown
    * state.
+   *
+   * TODO Re-docco.
    */
 
   /* &#9824; */
@@ -371,9 +383,7 @@ struct attendant {
     /* The aboslute path to plugin server program. */
     const char* path,
     /* A null terminated array of program arguments. */
-    const char* argv[],
-    /* The function to call when the plugin server process exits unexpectedly. */
-    void (*abend)()
+    char const* argv[]
   /* &mdash; */
   );
 
@@ -407,27 +417,6 @@ struct attendant {
 
   /* &#9824; */
   int (*ready)();
-
-  /* `pipe` &mdash; You can obtain handles to standard input, output and error.
-   * The pipe file descriptors or handles will remain consistant across
-   * restarts.
-   *
-   * The pipe is obtained by an index number. These numbers are constistant
-   * across platforms regardless of the file descriptors assigned by the
-   * operating system. They are 0 for stdin, 1 for stdout, and 2 for stderr.
-   *
-   * The plugin attendant does not provide a protocol for communication between
-   * the plugin stub and the plugin server process. Devise one to suit the needs
-   * of your plugin using the IPC facilities of the operating system.
-   *
-   * Between these pipes and the program arguments you ought to have enough IPC
-   * to connect your plugin stub to your plugin server process to bootstrap
-   * other forms of IPC. Standard I/O might be all you need if your needs are
-   * simple enough.
-   */
-
-  /* &#9824; */
-  attendant__pipe_t (*stdio)(int num);
 
   /* `retry` &mdash; Report that IPC with the plugin server process failed,
    * indicating that the plugin server process is either crashed or hung.

@@ -37,7 +37,7 @@ int check_reset(const char *message) {
     CHECK(err = close(pipeout[1]), err == -1);
 
     execl("relay", "relay", number, "1", path, (char*) 0);
-    bail(strerror(errno));
+    bail("cannot exec relay");
   default:
     CHECK(err = read(pipeout[0], &spipe, sizeof(spipe)), err == -1);
     if (spipe != pipestat[1]) bail("status pipe not received");

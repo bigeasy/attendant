@@ -3,70 +3,56 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 #include <errno.h>
 
 #include "../../../attendant.h"
 #include "../ok.h"
 #include "../../../eintr.h"
 
-void abend() { }
-
-static char * expected[] = {
-  "[initialize/success]",
-  "[start/success]",
-  "[launch/fork]",
-  "[launch/success]",
-  "[reap/poll]",
-  "[ready/exit]",
-  "[reap/shutdown]",
-  "[reap/poll]",
-  "[shutdown/exit]",
-  "[reap/hangup]",
-  "[reap/hungup]",
-  "[done/exit]",
-  NULL
-};
-
-void trace_ok(char **trace, char **expected, char *message) {
-  int matched = 1, i;
-  for (i = 0; matched && trace[i]; i++) {
-    if ((matched = ! ! expected[i])) {
-      matched = (strcmp(trace[i], expected[i]) == 0);
-    } 
-  }
-
-  matched = matched && ! expected[i];
-
-  ok(matched, message);
-  
-  if (! matched) {
-    printf("# EXPECTED:\n");
-    for (i = 0; expected[i]; i++) {
-      printf("# %s\n", expected[i]);
-    }
-    printf("# GOT:\n");
-    for (i = 0; trace[i]; i++) {
-      printf("# %s\n", trace[i]);
-    }
+int count = 0;
+void starter(int restart) {
+  char path[PATH_MAX];
+  char const * argv[] = { NULL };
+  if (count++ < 1) {
+    attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/when"), argv);
   }
 }
 
-int main() {
+static char fifo[PATH_MAX];
+
+void connector(attendant__pipe_t in, attendant__pipe_t out) {
+  const char *pipe = "pipe\n";
   int err;
-  char path[PATH_MAX], **trace, ch = '\n';
-  char const * argv[] = { NULL };
+  HANDLE_EINTR(write(in, pipe, strlen(pipe)), err);
+  ok(err != -1, "request pipe");
+  HANDLE_EINTR(read(out, fifo, sizeof(fifo)), err);
+  fifo[strlen(fifo) - 1] = '\0';
+  ok(err != -1, "get pipe # %s", fifo);
+}
 
-  printf("1..2\n");
+int main() {
+  int err, fd;
+  char const * exit = "exit\n";
+  struct attendant__initializer initializer;
 
-  attendant.initialize(strcat(getcwd(path, PATH_MAX), "/relay"), 31);  
-  attendant.start(strcat(getcwd(path, PATH_MAX), "/t/bin/server"), argv, abend);
+  initializer.starter = starter;
+  initializer.connector = connector;
+  strcat(getcwd(initializer.relay, sizeof(initializer.relay)), "/relay");
+  initializer.canary = 31;
+
+  printf("1..4\n");
+
+  attendant.initialize(&initializer);
+  starter(0);
   attendant.ready();
   attendant.shutdown();
-  HANDLE_EINTR(write(attendant.stdio(0), &ch, sizeof(ch)), err);
-  ok(attendant.done(30000), "done");
 
-  trace = attendant.tracepoints();
-  trace_ok(trace, expected, "cycle");
+  fd = open(fifo, O_WRONLY);
+  ok(fd != -1, "open fifo");
+  fflush(stdout);
+  HANDLE_EINTR(write(fd, exit, strlen(exit)), err);
+  ok(err != -1, "write fifo");
 
   attendant.destroy();  
 
