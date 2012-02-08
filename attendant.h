@@ -13,6 +13,11 @@
  * me directly, I might type out something just about as long. But, please, do
  * ask questions, and suggest documentation patches if this is confusing.
  *
+ * &mdash;
+ *
+ * *Now Helicon must needs pour forth for me, And with her choir Urania must
+ *  assist me, To put in verse things difficult to think.* &mdash; Dante
+ *
  * ## Origins
  *
  * The plugin attendant was written for use in an
@@ -91,7 +96,7 @@
  * try to start it. No search paths here.
  * * The plugin server process runs as long as the library is loaded and it
  * shuts down when the library is unloaded.
- * * On UNIX, the plugin server process will inherit an open file descriptor.
+ * * On UNIX, the plugin server process will inherit an open file descriptor,
  * with a file descriptor number of your choice. It is a canary file descriptor
  * used to detect plugin server process exit. The plugin server process will not
  * read from, write to, or close the file descriptor.
