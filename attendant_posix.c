@@ -1693,7 +1693,9 @@ static struct attendant__errors errors() {
 
 /* &#9824; &mdash; */
 static int destroy() {
+#ifdef _DEBUG
   int i;
+#endif
 
   /* Release our mutex and signaling devices. */
   pthread_mutex_destroy(&process.mutex);
