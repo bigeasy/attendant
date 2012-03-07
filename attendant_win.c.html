@@ -62,7 +62,7 @@ security</a></p>
 <p>TODO Duplicate handle.</p>
 
 <ul>
-<li><a href="http://stackoverflow.com/questions/819710/<a href='http://github.com/duplicatehandle-use-in-first-or-second-process/819735/issues/#issue/819735'>duplicatehandle-use-in-first-or-second-process/819735#819735</a>">DuplicateHandle(), use in first or second
+<li><a href="http://stackoverflow.com/questions/819710/duplicatehandle-use-in-first-or-second-process/819735#819735">DuplicateHandle(), use in first or second
 process?</a>
 *
 <a href="http://msdn.microsoft.com/en-us/library/windows/desktop/ms724251.aspx">DuplicateHandle</a>.</li>
@@ -208,7 +208,7 @@ UNIX file descriptor number. </p></td>
           <td class="docs"><p>We're not up for the task of defending against attackers that have access
 to the system as the current user. We go with the [default security
 attributes](
-<a href='http://msdn.microsoft.com/en-us/library/windows/desktop/aa365600.aspx'>http://msdn.microsoft.com/en-us/library/windows/desktop/aa365600.aspx</a>). If
+http://msdn.microsoft.com/en-us/library/windows/desktop/aa365600.aspx). If
 the system so far compromised that we need to restrict anonymous pipes
 using ACLS, then there are so many attack vectors, it is well beyond the
 compexlity bugdet of an NPAPI or similar plugin.</p>
@@ -226,7 +226,7 @@ because I can only imagine the irrationality.</p></td>
       
         <tr>
           <td class="docs"><p>Create the [standard I/O redirection pipes](
-<a href='http://msdn.microsoft.com/en-us/library/windows/desktop/ms682499.aspx'>http://msdn.microsoft.com/en-us/library/windows/desktop/ms682499.aspx</a>
+http://msdn.microsoft.com/en-us/library/windows/desktop/ms682499.aspx
 ). We keep these pipes around between recovered instances, so that we do
 not have to gaurd the handles with a critical section. That is, they are
 set once and remain valid for the lifetime of the plugin stub.</p></td>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>missing-relay.t.c</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<link rel="stylesheet" media="all" href="/attendant/css/docco.css">
+</head>
+<body>
+<div id="container">
+<div id="background"></div>
+  <table cellspacing="0" cellpadding="0">
+    <thead>
+      <tr>
+        <th class="docs"><h1>missing-relay.t.c</th>
+        <th class="code"></th>
+      </tr>
+    </thead>
+    <tbody>
+      
+        <tr>
+          <td class="docs"></td>
+          <td class="code"><div class="highlight"><pre><div class="highlight"><pre><span class="cp">#include &lt;limits.h&gt;</span>
+<span class="cp">#include &lt;unistd.h&gt;</span>
+<span class="cp">#include &lt;stdio.h&gt;</span>
+<span class="cp">#include &lt;stdlib.h&gt;</span>
+<span class="cp">#include &lt;string.h&gt;</span>
+<span class="cp">#include &lt;errno.h&gt;</span>
+
+<span class="cp">#include &quot;../../../errors.h&quot;</span>
+<span class="cp">#include &quot;../../../attendant.h&quot;</span>
+<span class="cp">#include &quot;../ok.h&quot;</span>
+<span class="cp">#include &quot;../../../eintr.h&quot;</span>
+
+<span class="kt">void</span> <span class="nf">starter</span><span class="p">(</span><span class="kt">int</span> <span class="n">restart</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">struct</span> <span class="n">attendant__errors</span> <span class="n">errors</span> <span class="o">=</span> <span class="n">attendant</span><span class="p">.</span><span class="n">errors</span><span class="p">();</span>
+  <span class="n">ok</span><span class="p">(</span><span class="n">errors</span><span class="p">.</span><span class="n">attendant</span> <span class="o">==</span> <span class="n">START_CANNOT_EXECV</span><span class="p">,</span> <span class="s">&quot;start cannot execve&quot;</span><span class="p">);</span>
+  <span class="n">ok</span><span class="p">(</span><span class="n">errors</span><span class="p">.</span><span class="n">system</span> <span class="o">==</span> <span class="n">ENOENT</span><span class="p">,</span> <span class="s">&quot;enoent&quot;</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+  <span class="kt">char</span> <span class="n">path</span><span class="p">[</span><span class="n">PATH_MAX</span><span class="p">];</span>
+  <span class="kt">char</span> <span class="k">const</span> <span class="o">*</span> <span class="n">argv</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span> <span class="nb">NULL</span> <span class="p">};</span>
+  <span class="k">struct</span> <span class="n">attendant__initializer</span> <span class="n">initializer</span><span class="p">;</span>
+
+  <span class="n">initializer</span><span class="p">.</span><span class="n">starter</span> <span class="o">=</span> <span class="n">starter</span><span class="p">;</span>
+  <span class="n">strcat</span><span class="p">(</span><span class="n">getcwd</span><span class="p">(</span><span class="n">initializer</span><span class="p">.</span><span class="n">relay</span><span class="p">,</span> <span class="n">PATH_MAX</span><span class="p">),</span> <span class="s">&quot;/relay-x&quot;</span><span class="p">);</span>
+  <span class="n">initializer</span><span class="p">.</span><span class="n">canary</span> <span class="o">=</span> <span class="mi">31</span><span class="p">;</span>
+
+  <span class="n">printf</span><span class="p">(</span><span class="s">&quot;1..2</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+  <span class="n">attendant</span><span class="p">.</span><span class="n">initialize</span><span class="p">(</span><span class="o">&amp;</span><span class="n">initializer</span><span class="p">);</span>
+  <span class="n">attendant</span><span class="p">.</span><span class="n">start</span><span class="p">(</span><span class="n">strcat</span><span class="p">(</span><span class="n">getcwd</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">PATH_MAX</span><span class="p">),</span> <span class="s">&quot;/t/bin/server&quot;</span><span class="p">),</span> <span class="n">argv</span><span class="p">);</span>
+  <span class="n">attendant</span><span class="p">.</span><span class="n">ready</span><span class="p">();</span>
+  <span class="n">attendant</span><span class="p">.</span><span class="n">destroy</span><span class="p">();</span>  
+
+  <span class="k">return</span> <span class="n">EXIT_SUCCESS</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</pre></div></td>
+        </tr>
+      
+    </tbody>
+  </table>
+</div>
+</body>
+</html>
