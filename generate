@@ -1,0 +1,3 @@
+#/bin/bash
+
+stencil stencil//docco.stencil %.html 'code//*.c' 'code//*.h'

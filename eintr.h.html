@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>={ @file }</title>
+<title></title>
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
 <link rel="stylesheet" media="all" href="/attendant/css/docco.css">
 </head>
@@ -9,10 +9,10 @@
 <div id="container">
 <div id="background"></div>
 <!DOCTYPE html>
-%{ @extend("./stencil/docco", _) }
+
 <html>
 <head>
-  <title>={ @source.file }</title>
+  <title>./eintr.h</title>
   <meta http-equiv="content-type" content="text/html; charset=UTF-8">
   <link rel="stylesheet" media="all" href="/attendant/css/docco.css">
 </head>
@@ -25,17 +25,24 @@
   <table cellspacing="0" cellpadding="0">
     <thead>
       <tr>
-        <th class="docs"><h1>={ @file }</th>
+        <th class="docs"><h1></th>
         <th class="code"></th>
       </tr>
     </thead>
     <tbody>
-      %{ for page in @self.docco.edify.docco "c", @source.body, _ }:
+      
         <tr>
-          <td class="docs">-{ page.docco }</td>
-          <td class="code"><div class="highlight"><pre>-{ page.source }</pre></div></td>
+          <td class="docs"><p>Many system calls are subject to interrupt when signal handlers are in place.
+This macro makes that less onerous. None of the pthreads functions have the
+<code>EINTR</code> problem.</p></td>
+          <td class="code"><div class="highlight"><pre><span class="cp">#define HANDLE_EINTR(call, err)         \</span>
+<span class="cp">do {                                    \</span>
+<span class="cp">  err = (call);                         \</span>
+<span class="cp">} while (err == -1 &amp;&amp; errno == EINTR)</span>
+
+</pre></div></td>
         </tr>
-      %{ end }
+      
     </tbody>
   </table>
 </div>

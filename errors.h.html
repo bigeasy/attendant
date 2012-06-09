@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title></title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<link rel="stylesheet" media="all" href="/attendant/css/docco.css">
+</head>
+<body>
+<div id="container">
+<div id="background"></div>
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>./errors.h</title>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <link rel="stylesheet" media="all" href="/attendant/css/docco.css">
+</head>
+<body>
+<div id="container">
+<a href="http://github.com/bigeasy/strata"><img
+  style="position: fixed; top: 0; right: 0; border: 0;"
+  src="http://s3.amazonaws.com/github/ribbons/forkme_right_orange_ff7600.png" alt="Fork me on GitHub" /></a>
+<div id="background"></div>
+  <table cellspacing="0" cellpadding="0">
+    <thead>
+      <tr>
+        <th class="docs"><h1></th>
+        <th class="code"></th>
+      </tr>
+    </thead>
+    <tbody>
+      
+        <tr>
+          <td class="docs"><p>To report errors, we provide you with a morass of error codes. You can
+combine this with errno to get a picture of what went wrong. There is no
+logging available. We surrender immediately at the first error. There is
+really not much you can do in response to a failure, especially as a library
+dynamically loaded into a host that used up all its file handles (we only
+need what, six, is that too much to ask?)</p>
+
+<p>There is no rhyme or reason to these codes. They are numbered according the
+order in which I thought them up. They are long and verbose to be self
+documenting.</p>
+
+<p>The last error is obtained using the error method. You can get the last errno
+associated with the error too. To understand what the errno means, have a
+look at the source, then have a look at the man pages.</p></td>
+          <td class="code"><div class="highlight"><pre><span class="cp">#define INITIALIZE_CANNOT_CREATE_STDIN_PIPE     101</span>
+<span class="cp">#define INITIALIZE_CANNOT_CREATE_STDOUT_PIPE    102</span>
+<span class="cp">#define INITIALIZE_CANNOT_CREATE_STDERR_PIPE    103</span>
+<span class="cp">#define INITIALIZE_CANNOT_CREATE_REAPER_PIPE    104</span>
+<span class="cp">#define INITIALIZE_CONNECTOR_REQUIRED          -104</span>
+<span class="cp">#define START_ALREADY_RUNNING                   105</span>
+<span class="cp">#define INITIALIZE_STARTER_REQUIRED             106</span>
+<span class="cp">#define LAUNCH_CANNOT_FORK                      107</span>
+<span class="cp">#define LAUNCH_INCOMPLETE_ERROR_CODE            108</span>
+<span class="cp">#define START_CANNOT_MALLOC                     109</span>
+<span class="cp">#define START_CANNOT_EXECV                      110</span>
+<span class="cp">#define LAUNCH_CANNOT_CREATE_STDIN_PIPE         111</span>
+<span class="cp">#define LAUNCH_CANNOT_CREATE_STDOUT_PIPE        112</span>
+<span class="cp">#define LAUNCH_CANNOT_CREATE_STDERR_PIPE        113</span>
+<span class="cp">#define LAUNCH_CANNOT_CREATE_FORK_PIPE          114</span>
+<span class="cp">#define LAUNCH_CANNOT_CREATE_STATUS_PIPE        115</span>
+<span class="cp">#define LAUNCH_CANNOT_MALLOC                    116</span>
+<span class="cp">#define START_CANNOT_CLOSE_STDIN_PIPE           117</span>
+<span class="cp">#define START_CANNOT_CLOSE_STDOUT_PIPE          118</span>
+<span class="cp">#define START_CANNOT_CLOSE_STDERR_PIPE          119</span>
+<span class="cp">#define START_CANNOT_DUP_STDIN_PIPE             120</span>
+<span class="cp">#define START_CANNOT_DUP_STDOUT_PIPE            121</span>
+<span class="cp">#define START_CANNOT_DUP_STDERR_PIPE            122</span>
+<span class="cp">#define RELAY_PROGRAM_MISSING                   123</span>
+<span class="cp">#define START_CANNOT_SPAWN_THREAD               124</span>
+<span class="cp">#define RELAY_PROGRAM_PATH_NOT_ABSOLUTE         125</span>
+<span class="cp">#define RELAY_CANNOT_OPEN_DEV_FD                126</span>
+<span class="cp">#define RELAY_CANNOT_EXEC                       127 </span>
+<span class="cp">#define RELAY_PULSE_PIPE_MALFORMED              128 </span>
+<span class="cp">#define RELAY_PULSE_PIPE_MISSING                129 </span>
+<span class="cp">#define REAPER_CANNOT_READ_REAPER_PIPE          130</span>
+<span class="cp">#define REAPER_TRUNCATED_READ_REAPER_PIPE       131</span>
+<span class="cp">#define LAUNCH_RELAY_PIPE_STDOUT_FAILED         132</span>
+<span class="cp">#define LAUNCH_RELAY_PIPE_RELAY_FAILED          133</span>
+
+<span class="cp">#define REAPER_UNEXPECTED_CANARY_PIPE_EVENT     134</span>
+<span class="cp">#define REAPER_UNEXPECTED_REAPER_PIPE_EVENT     135</span>
+<span class="cp">#define LAUNCH_IMMEDIATE_RELAY_EXIT             136</span>
+<span class="cp">#define LAUNCH_RELAY_PIPE_HUNG_UP               137</span>
+
+<span class="cp">#define PARTIAL_FORK_ERROR_CODE                 138</span>
+<span class="cp">#define PARTIAL_EXEC_ERROR_CODE                 139</span>
+<span class="cp">#define PARTIAL_STDOUT_STATUS_PIPE_NUMBER       140</span>
+<span class="cp">#define PARTIAL_STATUS_PIPE_NUMBER              141</span>
+
+<span class="kt">void</span> <span class="n">send_error</span><span class="p">(</span><span class="kt">int</span> <span class="n">pipe</span><span class="p">,</span> <span class="kt">int</span> <span class="n">code</span><span class="p">);</span>
+
+</pre></div></td>
+        </tr>
+      
+    </tbody>
+  </table>
+</div>
+</body>
+</html>
