@@ -19,13 +19,13 @@
  * handle, though. We can use either named pipes or mailslots.
  *
  * Thus, we still need our relay program. Our relay program is created without
- * handle inheritence, but with a command line that describes the handle of an
+ * handle inheritance, but with a command line that describes the handle of an
  * anonymous pipe. The relay program will read that argument for the handle of
  * the anonymous pipe.
  *
  * The anonymous pipe is used to pass inheritable child ends of the standard I/O
  * pipes. Our relay program launches our target program, with the target
- * arguments, and with inherience set, and with our 
+ * arguments, and with inheritance set, and with our 
  *
  * TODO Jobs.
  *
@@ -131,12 +131,12 @@ static int initalize(const char *relay, int canary) {
    * http://msdn.microsoft.com/en-us/library/windows/desktop/aa365600.aspx). If
    * the system so far compromised that we need to restrict anonymous pipes
    * using ACLS, then there are so many attack vectors, it is well beyond the
-   * compexlity bugdet of an NPAPI or similar plugin.
+   * complexity budget of an NPAPI or similar plugin.
    *
-   * I'm always concersed that I'm opening myself up to trollish criticism,
-   * that this is some sort of adminission that I don't care about security.
-   * It's not. I'd be curious to hear a ranting challenge to these comments,
-   * because I can only imagine the irrationality.
+   * I'm always concerned that I'm opening myself up to trollish criticism, that
+   * this is some sort of admission that I don't care about security. It's not.
+   * I'd be curious to hear a ranting challenge to these comments, because I can
+   * only imagine the irrationality.
    */
   security.nLength = sizeof(SECURITY_ATTRIBUTES); 
   security.bInheritHandle = TRUE; 
