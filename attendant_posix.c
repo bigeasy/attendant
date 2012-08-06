@@ -181,7 +181,7 @@
  */
 
 /* &#9824; */
-typedef void (*starter_t)(int restart);
+typedef void (*starter_t)(int restart, int uptime);
 
 /* TODO Document. */
 typedef void (*connector_t)(attendant__pipe_t in, attendant__pipe_t out);
@@ -195,11 +195,13 @@ typedef void (*connector_t)(attendant__pipe_t in, attendant__pipe_t out);
 /* &#9824; */
 struct cond {
   /* Server is running or it will never run again. */
-  pthread_cond_t  running;  
+  pthread_cond_t running;  
+  /* Attendant is waiting a bit before trying to start the server. */
+  pthread_cond_t chilling;
   /* Server has shutdown. */
-  pthread_cond_t  shutdown; 
+  pthread_cond_t shutdown; 
   /* Used for sake of timed wait. */
-  pthread_cond_t  getgpid;  
+  pthread_cond_t getgpid;  
 /* &mdash; */
 };
 
@@ -220,6 +222,8 @@ struct process {
   int canary;
   /* User supplied server progress program start. */
   starter_t starter;
+  /* Time of last start. */
+  time_t start_time;
   /* User supplied plugin stub to server process IPC initialization. */
   connector_t connector;
   /* SIGCHLD is not SIG_IGN so waitpid will block on specific pid. */
@@ -432,6 +436,7 @@ static int initalize(struct attendant__initializer *initializer)
 #endif
 
   (void) pthread_cond_init(&process.cond.running, &attr);
+  (void) pthread_cond_init(&process.cond.chilling, &attr);
   (void) pthread_cond_init(&process.cond.shutdown, &attr);
   (void) pthread_cond_init(&process.cond.getgpid, &attr);
 
@@ -521,7 +526,7 @@ fail:
 }
 
 /* If someone or something, say NTP, resets the system clock while we are
- * waiting on a condition, the outcome could be an aburdly long wait, hanging
+ * waiting on a condition, the outcome could be an absurdly long wait, hanging
  * the application. 
  *
  * With pthreads, Linux has an option to use CLOCK_MONOTONIC with the pthread
@@ -536,14 +541,14 @@ fail:
  * implementation in Linux. The pthread conditions have their clock set to the
  * CLOCK_MONOTONIC clock when they are created above.
  *
- * TK Move these notes on suprious wakeup.
+ * TK Move these notes on spurious wakeup.
  *
  * Returns the number of milliseconds remaining for the timeout. The condition
- * may be signaled before the timeout, due to [suprious
+ * may be signaled before the timeout, due to [spurious
  * wakeup](https://groups.google.com/group/comp.programming.threads/msg/bb8299804652fdd7),
  * but the conditions that caused the caller to wait may not have changed. The
  * caller may want to wait for the remaining amount of time, instead of trying
- * for the the full amount.
+ * for the full amount.
  *
  * We wouldn't worry about this if a timeout meant that the user would recheck
  * invariants, as is the case for the reaper thread call of this function, but
@@ -619,7 +624,6 @@ static void close_pipes() {
  * the client provided abnormal exit handler. The client can choose to launch
  * the plugin server process with different arguments each time.
  *
- *
  * You can only call this once at library load from outside of the abend
  * handler. After calling this once from outside, the function must only be
  * called from within the abend handler in the thread that invokes the abend
@@ -627,10 +631,15 @@ static void close_pipes() {
  *
  * We could assert that with thread local storage for the reaper thread, and
  * passing instance numbers through the launcher thread, but we won't.
+ *
+ * If you don't want to respawn to quickly, you can keep your cool by providing
+ * a duration in seconds to wait before the start is actually invoked. The wait
+ * and the start will be cancelled if a shutdown occurs before the wait times
+ * out.
  */
 
 /* &mdash; */
-static int start(const char* path, char const* argv[])
+static int start(const char* path, char const* argv[], int wait)
 {
   int err, argc, i, running;
   size_t size;
@@ -681,6 +690,19 @@ static int start(const char* path, char const* argv[])
     FAIL(process.argv[i + 4] == NULL, START_CANNOT_MALLOC, fail);
   }
   process.argv[argc + 4] = NULL;
+
+  /* If we've been asked to wait, let's wait. We might get woken up by a
+   * call to shutdown, but the path forward now is to launch the process server,
+   * so we continue with startup, expecting that we'll shutdown the moment we
+   * startup. */
+  if (wait) {
+    pthread_mutex_lock(&process.mutex);
+    say("[start/chilling] %d", wait);
+    pthread_cond_waitforabit(&process.cond.chilling, &process.mutex, wait);
+    pthread_mutex_unlock(&process.mutex);
+  }
+
+  process.start_time = time(NULL);
 
   /* Create a launcher thread. */
   err = pthread_create(&process.launcher, NULL, launch, NULL);
@@ -1098,8 +1120,9 @@ static void* reap(void *data)
       }
     }
 
-    /* Note that, errors here make the situation hopeless. If we encouter errors
-     * with the process monitoring pipes, we go to the shutdown state. */
+    /* Note that, errors here make the situation hopeless. If we encounter
+     * errors with the process monitoring pipes, we go to the shutdown state.
+     */
 
     /* Did the monitored process terminate? */
     if (channels[CANARY].revents & POLLHUP) {
@@ -1289,7 +1312,7 @@ static void signal_termination() {
   /* If we've decided to try a restart, call the abend handler. */
   if (process.restarting) {
     /* Call the starter to restarter the server process. */
-    process.starter(1);
+    process.starter(1, time(NULL) - process.start_time);
 
     /* If the abend handler did not call start, then it has decided to shutdown.
      * We are no longer restarting, and we can signal a process state change to
@@ -1554,6 +1577,13 @@ static int shutdown() {
    * restart. If we are in the middle of a server restart, we may as well wait
    * for it to finish before we continue. */
   (void) pthread_mutex_lock(&process.mutex);
+
+  /* If we're chilling before a restart, let's stop chilling. TODO: We could
+   * have a count of millis to chill, which we set to zero, handling the case of
+   * spurious wake-ups. */
+  (void) pthread_cond_signal(&process.cond.chilling);
+
+  /* Wait until we're no longer restarting. */
   while (process.restarting) {
     say("[shutdown/restarting]");
     (void) pthread_cond_wait(&process.cond.running, &process.mutex);
@@ -1663,6 +1693,7 @@ static int destroy() {
   /* Release our mutex and signaling devices. */
   pthread_mutex_destroy(&process.mutex);
   pthread_cond_destroy(&process.cond.running);
+  pthread_cond_destroy(&process.cond.chilling);
   pthread_cond_destroy(&process.cond.shutdown);
   pthread_cond_destroy(&process.cond.getgpid);
 

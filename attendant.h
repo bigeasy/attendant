@@ -215,11 +215,11 @@
  * We allow the plugin developer to decide what to do when the plugin server
  * process crashes.
  *
- * &#9824; &nbsp; `abend` &dash; Is as plugin developer provided function that
- * is called when the plugin attendant detects that the plugin server process
- * has crashed. The `abend` function can opt to call the `start` function again
- * to restart the plugin server process. If it does not call the `start`
- * function, the plugin attendant goes into a final shutdown state.
+ * &#9824; &nbsp; `abend` &dash; Is a plugin developer provided function that is
+ * called when the plugin attendant detects that the plugin server process has
+ * crashed. The `abend` function can opt to call the `start` function again to
+ * restart the plugin server process. If it does not call the `start` function,
+ * the plugin attendant goes into a final shutdown state.
  *
  * The plugin stub might be first to detect a problem with the plugin server
  * process, being cut off in the middle of IPC, or else discovering that that
@@ -324,7 +324,15 @@ typedef int attendant__pipe_t;
 #endif
 
 struct attendant__initializer {
-  void (*starter)(int restart);
+  /* A function to invoke to start the attendant in the event of an unexpected
+   * shutdown. The `uptime` is the number of seconds the out-of-process plugin
+   * has been running. */
+  void (*starter)(int restart, int uptime);
+  /* A plugin developer provided function to connect the plugin with the
+   * out-of-process server. The standard input and standard output are the only
+   * cross-platform communication channels available, aside from program
+   * arguments. The plugin developer should use this channels to establish a
+   * more robust method of IPC appropriate for the platform. */
   void (*connector)(attendant__pipe_t in, attendant__pipe_t out);
   /* The full path to the plugin attendant relay program. This program will
    * ensure that all file handles are closed and signal handlers reset. It the
@@ -395,7 +403,9 @@ struct attendant {
     /* The aboslute path to plugin server program. */
     const char* path,
     /* A null terminated array of program arguments. */
-    char const* argv[]
+    char const* argv[],
+    /* A delay in milliseconds before starting or zero to start immediately. */
+    int wait
   /* &mdash; */
   );
 
@@ -411,6 +421,9 @@ struct attendant {
    * you'll have to call `ready` at the start of every function. A call to
    * `ready` is not expensive, though, so don't contort your plugin to avoid
    * calling it.
+   *
+   * TODO: NO NO. We have connector now that makes sure that when ready is
+   * called, the plugin developer specified setup is performed.
    *
    * The `ready` function blocks until the plugin server process has started.
    * There may still be a race condition where the plugin stub makes a call to
