@@ -6,7 +6,7 @@
  * I'm documenting what I've written. I'm not defending what I've written. If
  * you think you can do better, submit a patch. If I disagree, then fork. If you
  * find a bug, tell me, please. Otherwise, before you tell me that there is
- * something wrong, try to make sure you understand the inherient compromises.
+ * something wrong, try to make sure you understand the inherent compromises.
  *
  * It took a longer to write this than I would have expected. If you don't have
  * time to read the documentation, I can't read it to you. If you were to email
@@ -172,7 +172,7 @@
  * Our ideal UNIX host application would set a benign child handler to handle
  * `SIGCHLD`, or leave it the default. It would use `waitpid` to wait only on
  * the exit of child processes that it created itself, allowing the plugin to
- * use `waitpid` to wait on the exit of the plugin process server. It elminate
+ * use `waitpid` to wait on the exit of the plugin process server. It eliminate
  * `SIGPIPE` signals by  setting its `SIGPIPE` handler set to the `SIG_IGN`
  * disposition.
  *
@@ -182,7 +182,7 @@
  * write end of a pipe. The plugin server process must not write to this file
  * descriptor, nor close it. The file descriptor will close when the plugin
  * server process exits. The plugin attendant listens for the `EPIPE`. When it
- * arrives it knows that the the plugin server process has terminated.
+ * arrives it knows that the plugin server process has terminated.
  *
  * The pipe used to detect plugin server process termination is called the
  * canary pipe.
@@ -200,7 +200,7 @@
  * These actions take place during library load.
  *
  * &#9824; &nbsp; `initialize` &mdash; The plugin is loaded and the library
- * initailization function calls the plugin attendant `initialize` function.
+ * initialization function calls the plugin attendant `initialize` function.
  *
  * &#9824; &nbsp; `start` &dash; Immediately after calling `initialize`, the
  * plugin stub calls the `start` function to execute what we hope will be the
@@ -228,12 +228,12 @@
  * &#9824; &nbsp; `retry` &dash; Called by the plugin stub after IPC fails. The
  * function blocks until the plugin attendant successfully restarts the plugin
  * server process, or alternatively, the plugin attendant enters the final
- * shutdown state. If the `retry` method return true, IPC should be retryed. IPC
- * should be retryed until `retry` returns false.
+ * shutdown state. If the `retry` method return true, IPC should be retried. IPC
+ * should be retried until `retry` returns false.
  *
  * Shutdown occurs when the host application unloads the plugin library in the
  * library deinitialization function. The plugin attendant does not send a
- * shutdown signal to the plugin server process. Orderly shutdown is initated
+ * shutdown signal to the plugin server process. Orderly shutdown is initiated
  * through IPC between the plugin stub and the plugin server process.
  *
  * &#9824; &nbsp; `shutdown` &mdash; Called by the plugin stub to inform the
@@ -251,7 +251,7 @@
  * reloaded by the host application, or the host application is restarted.
  *
  * &#9824; &nbsp; `destroy` &mdash; Called after the plugin attendant has
- * entered the shutdown state, prior the library unload, to release a smidge of
+ * entered the shutdown state, prior the library unload, to release a smidgen of
  * memory.
  * 
  * ## Limitations 
@@ -259,7 +259,7 @@
  * If the host application does not ignore `SIGPIPE`, the plugin stub cannot
  * rely on the `stdin` pipe to send data to the plugin server process.
  *
- * You could endavour to write a plugin server process that itself will not
+ * You could endeavour to write a plugin server process that itself will not
  * crash, a minimal plugin server process, that in turn monitors the workhorse
  * plugin server process, but I'm sure you're going to find a few more
  * difficulties at that level in any case.
@@ -280,7 +280,7 @@
  * limitations, that ought not truly limit your abilities.
  *
  * &#9824; &nbsp; The plugin attendant monitors a single plugin server process. The
- * plugin attendant has to accomodate a host application that has reserved the
+ * plugin attendant has to accommodate a host application that has reserved the
  * process monitoring for itself. Its method of monitoring the plugin server
  * process is dedicated to reducing conflicts between the host application and
  * the plugin server process. It is not the robust, general purpose process
@@ -337,12 +337,12 @@ struct attendant__initializer {
   /* The full path to the plugin attendant relay program. This program will
    * ensure that all file handles are closed and signal handlers reset. It the
    * responsibility of the plugin developer to distribute the relay program and
-   * make it available to the plugin attendnat. */
+   * make it available to the plugin attendant. */
   char relay[FILENAME_MAX];
   /* */
 #ifndef _WIN32
   /* The file descriptor number for the plugin server process side of the canary
-   * pipe. Must not conflict with the file descriptor numbers assinged to
+   * pipe. Must not conflict with the file descriptor numbers assigned to
    * standard I/O by the operating system. The plugin developer has the option
    * to specify the file descriptor number to avoid any conflicts. If you don't
    * care, then make an arbitrary decision. */
@@ -362,8 +362,8 @@ struct attendant__initializer {
 
 /* */
 struct attendant {
-  /* `initialize` &mdash; This must be called to initialize the the monitor
-   * before any other functions are called. Call `initialize` during the global
+  /* `initialize` &mdash; This must be called to initialize the monitor before
+   * any other functions are called. Call `initialize` during the global
    * initialization of your library, followed by the initial call to `start`.
    *
    * TODO Re-docco.
@@ -388,7 +388,7 @@ struct attendant {
    * The abend callback must take precautions to be thread safe. It will be
    * called from a different thread than the thread that performed the first
    * call to the `start` function. If you need to reference variables shared by
-   * the rest of your plugin stub, those variables need to be gaurded by a
+   * the rest of your plugin stub, those variables need to be guarded by a
    * mutex.
    *
    * After the plugin attendant enters the shutdown state, it cannot be
@@ -457,7 +457,7 @@ struct attendant {
    * The `retry` function blocks until the plugin attendant successfully
    * restarts the plugin server process, or alternatively, the plugin attendant
    * enters the final shutdown state. If the `retry` function return true, IPC
-   * should be retryed. IPC should be retryed until IPC succeeds, or `retry`
+   * should be retried. IPC should be retried until IPC succeeds, or `retry`
    * returns false.
    *
    * If `retry` returns false, the plugin attendant has entered the final
@@ -476,14 +476,14 @@ struct attendant {
    * itself. The plugin stub must tell the plugin server process to shutdown
    * through some form of IPC.
    *
-   * The `shutdown` function only informs the the plugin attendant that it
-   * should no longer treat plugin server process exit as abnormal. That is
-   * should no longer attempt to restart the plugin server process.
+   * The `shutdown` function only informs the plugin attendant that it should no
+   * longer treat plugin server process exit as abnormal. That is should no
+   * longer attempt to restart the plugin server process.
    *
    * Once in the shutdown state, the plugin server process cannot be restarted
    * by the currently loaded plugin library. The plugin server process will not
    * run again until the plugin library is reloaded or the host application is
-   * restrated.
+   * restarted.
    *
    * The plugin attendant will enter the shutdown state in response to a call to
    * the `shutdown` function, the `scram` function, or if the plugin developer
@@ -511,7 +511,7 @@ struct attendant {
    * shutdown should be performed when the plugin library is unloaded and the
    * library deinitialization function is called.
    *
-   * After initiating an orderly shutdown, wait on `done` with a resonable
+   * After initiating an orderly shutdown, wait on `done` with a reasonable
    * timeout. If the timeout expires, `done` will return false.
    *
    * If `done` returns false you should force plugin server termination with by
@@ -536,23 +536,23 @@ struct attendant {
    * plugin attendant error code.
    *
    * Errors can be checked after a failed call to one of the plugin attendant
-   * function, or else at the start of a call to the plugin developer suppliesd
+   * function, or else at the start of a call to the plugin developer supplied
    * `abend` function, before any plugin attendant functions are called, to
    * obtain the reason why the abend function was called.
    *
    * Errors generated by the problems with the plugin attendant itself are
    * really assertions. The plugin attendant has so few moving parts that if it
    * cannot function, there is something wrong with configuration or
-   * instalation of the plugin.
+   * installation of the plugin.
    *
    * Errors indicating that the plugin process cannot start would also indicate
    * that there is a problem with configuration or installation.
    *
    * When the plugin server process crashes, the `errors` function will give a
-   * a reason so vauge as to be useless. The plugin server process should
-   * maintain a log that can be referenced to see where it terminated, or a
-   * crash log that records the stack before exit. Using a crash reporter, and
-   * with the end user's permission, you can use this log to diagnose errors.
+   * reason so vague as to be useless. The plugin server process should maintain
+   * a log that can be referenced to see where it terminated, or a crash log
+   * that records the stack before exit. Using a crash reporter, and with the
+   * end user's permission, you can use this log to diagnose errors.
    *
    * There are a few errors that are marked as assertions. If you detect one of
    * these errors, then I've made an assumption about how the plugin attendant

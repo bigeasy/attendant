@@ -1,5 +1,5 @@
 /* There is a lot of work to do to create clean slate for our server process,
- * and the easiest way to get there is to have an intremediate program occupy
+ * and the easiest way to get there is to have an intermediate program occupy
  * the process.
  *
  * Initially, I tried to do this was going to take place in the attendant
@@ -24,9 +24,9 @@
 #include "eintr.h"
 
 /* The first argument to the program is file handle of a pipe used to report
- * errors to the library proecess start thread in the host application. We use
+ * errors to the library process start thread in the host application. We use
  * this extra pipe instead of STDERR or STDOUT because it will be closed on
- * exec. We set all non-stdio file descriptrs to close on exit so that the
+ * exec. We set all non-stdio file descriptors to close on exit so that the
  * server process will not inherit file descriptors from the host application.
  * The start thread blocks on the extra pipe reading a error code an errno
  * written using the send_error function. If it gets an EPIPE instead of an
@@ -72,12 +72,12 @@ int is_stdio(int fd) {
  * probably mean fewer file descriptors to close.
  *
  * Rather than closing the file descriptors, we set the close on exec flag
- * FD_CLOEXEC. This is because the attendent library in the host application has
+ * FD_CLOEXEC. This is because the attendant library in the host application has
  * fed us a senty file descriptor that is the write end of a pipe. When we set
  * FD_CLOEXEC on that file descriptor and then execve, a read from the read end
  * of the pipe will generate and EPIPE. This program will send a success code
- * through STDERR prior to execve. If the startup thread recieves the success
- * code, it reads from the senty pipe until it gets an EPIPE. At that point it
+ * through STDERR prior to execve. If the startup thread receives the success
+ * code, it reads from the sentry pipe until it gets an EPIPE. At that point it
  * knows that the server program has been loaded into the process.
  */
 void set_close_on_exec() {
@@ -110,13 +110,13 @@ void set_close_on_exec() {
  * of signal handlers.
  */
 
-/* We don't gaurd against a host application that considers us an attacker. The
- * library process attendent is linked into a dynamically loaded library
- * implemented to extend the an application that provides a plugin mechanism.
- * The host application will have loaded the plugin. The host application should
+/* We don't guard against a host application that considers us an attacker. The
+ * library process attendant is linked into a dynamically loaded library
+ * implemented to extend the application that provides a plugin mechanism. The
+ * host application will have loaded the plugin. The host application should
  * expect the plugin to open files, sockets, etc.
  * 
- * This is because the attendent library is dynamically loaded into
+ * This is because the attendant library is dynamically loaded into
  * a host application, where the library has no control over the global
  * environment. It cannot make assumptions about the disposition of signal han
  
@@ -144,7 +144,7 @@ int reset_signals() {
  * get the correct fd on stdout, it knows that we weren't able to get past this
  * step. If we send the wrong fd, then the start thread can record the error and
  * give up on launching the server process altogether, because that would be a
- * really fundimental error. */
+ * really fundamental error. */
 void get_status_pipe(int argc, char *argv[]) {
   int err;
   if (argc < 2) exit(127);

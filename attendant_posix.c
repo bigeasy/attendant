@@ -23,7 +23,7 @@
  *
  * If you need to launch multiple processes to service your plugin, then make
  * the first process you launch a process that monitors your flock of processes.
- * Attendant is not a general purpose process monitor, it focues on the
+ * Attendant is not a general purpose process monitor, it focuses on the
  * challenges of monitoring a single process in the context of a host
  * application that may or may not expect plugins to launch child processes. It
  * isolates the plugin server process from the host application and vice versa. 
@@ -32,12 +32,12 @@
  * communication between the plugin stub and the plugin process. 
  *
  * You can initialize inter-process communication using command line arguments
- * and the redirected standard I/O pipes. You can commicate using named pipes
+ * and the redirected standard I/O pipes. You can communicate using named pipes
  * or TCP/IP sockets.
  * 
  * You might decide that standard I/O is sufficient for inter-process
  * communication between your plugin stub and the plugin process.  You are still
- * responsible for desiging a protocol that will use the standard I/O pipes.
+ * responsible for designing a protocol that will use the standard I/O pipes.
  *
  * Attendant may not work with all host applications, but it does its best to be
  * as unobtrusive as possible. It forks and execs calling only async-safe system
@@ -53,7 +53,7 @@
  * signals and is waiting on all child processes for its own process monitoring
  * needs.
  *
- * You might be in a multi-threaded application, where forked proceses can only
+ * You might be in a multi-threaded application, where forked processes can only
  * make async-safe system calls, anything less is thread-unsafe. You might be in
  * an multi-process application, that has registered its own signal handlers,
  * and treats your child process as one of its own workers.  You don't have
@@ -62,10 +62,10 @@
  * inherit.
  *
  * This required a lot of careful reading of man pages, so I've annotated the
- * code thurougly, in literate programming style, formatted for reading after
+ * code thoroughly, in literate programming style, formatted for reading after
  * passing it though a fork of Docco I doctored to handle C's multi-line
  * comments. I'm going to remind myself now that the comments are supposed to
- * assist my recolection when the time comes to consider fork and exec once
+ * assist my recollection when the time comes to consider fork and exec once
  * again.
  *
  * ### Drop Off
@@ -74,7 +74,7 @@
  * the most fragile state possible, we will be sure not to make any system calls
  * that are not async-safe, allocate no memory, twiddle and mutexes.
  * 
- * At the time of writing, this code is indended for use on OS X, Linux and
+ * At the time of writing, this code is intended for use on OS X, Linux and
  * Windows, to be dynamically linked into a running instance of Safari, Firefox
  * or Chrome. Here are the considerations for these environments.
  * 
@@ -82,7 +82,7 @@
  * multi-process architecture. Fork and threads do not mix well. This creates
  * two sets of considerations.
  * 
- * For the multi-threaded architectures, fork can come as a surprise, distrubing
+ * For the multi-threaded architectures, fork can come as a surprise, disturbing
  * the state mutexes, stomping on the mutexes used to make traditional global
  * functions thread safe.
  * 
@@ -119,20 +119,20 @@
  * Safari WebKit doesn't appear to call FD_CLOEXEC when it opens files or
  * sockets, so we might have a few lying around.
  *
- * Our multi-process architecture Google Chrome, might be caught off gaurd when
+ * Our multi-process architecture Google Chrome, might be caught off guard when
  * child processes are launched that are not its own, but it sets up the
  * environment for proper child handling. It chooses the file handles that a
  * child process will inherit carefully, but it seems like it does this right
  * before a fork, and all other handles are set to close on exec.
  *
- * Our third architecture is the unknown future multi-headache one where
- * there is grief is optimum. That would be a host application that has a
- * phenominal number of file handles open and ready to inherit.
+ * Our third architecture is the unknown future multi-headache one where there
+ * is grief is optimum. That would be a host application that has a phenomenal
+ * number of file handles open and ready to inherit.
  *
  * In any case, we're going to loop through all the open handles and close
  * the ones that are not stdio.
  *
- * The worst case is we have an enormous number of open file hanldes that we
+ * The worst case is we have an enormous number of open file handles that we
  * have to close. The best case is that we have none. The error case is that
  * here are no handles left to get the handles we need to close the handles.
  *
@@ -171,11 +171,11 @@
  * so if you supply a callback, be sure to be thread-safe.
  *
  * You are probably going to restart the server process, which means that you'll
- * have to reinitialize your library to use it. Any variables visibile to both
+ * have to reinitialize your library to use it. Any variables visible to both
  * this function and your library need to be guarded by a mutex.
  *
  * And no, don't just make a variable volatile and think that will cover it. It
- * needs to be gaurded by a mutex to flush memory accross CPU cores.
+ * needs to be guarded by a mutex to flush memory across CPU cores.
  *
  * TODO Re-docco.
  */
@@ -244,7 +244,7 @@ struct process {
   struct attendant__errors errors;
   /* Thread local storage key for thread local storage of instance count. */
   pthread_key_t key;          
-  /* Gaurd process variables referenced by both the stub functions running in
+  /* Guard process variables referenced by both the stub functions running in
    * the plugin threads and the server process management threads. */
   pthread_mutex_t mutex;      
   /* Collection of conditions. */
@@ -312,7 +312,7 @@ static struct process process;
 /* The reaper thread will poll the canary pipe above, listening for the library
  * server process exit. At the same time it will poll this instance pipe, which
  * is used by the plugin stub to wake the reaper thread and tell it to forcibly
- * retart the plugin server process. The plugin server process may have become
+ * restart the plugin server process. The plugin server process may have become
  * unresponsive, but may not have exited. The plugin stub will detect this as
  * IPC calls timeout, while the reaper thread can only detect exit.
  */
