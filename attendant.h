@@ -559,22 +559,7 @@ struct attendant {
   /* &#9824; */
   int (*destroy)();
 
-#ifdef _DEBUG
-  /* `tracepoints` &mdash; Returns a null terminated  of tracepoints as
-   * formatted strings. Each tracepoint takes the form of `[function/event]`.
-   * For example, `[initialize/success]` or `[reaper/shutdown]`.
-   *
-   * The tracer is limited to 255 trace points. It stop gathering trace points
-   * after the limit is reached.
-   *
-   * The trace is used only with unit testing. This is not a general purpose
-   * logging mechanism.
-   */
-
-  /* &#9824; */
-  char **(*tracepoints)();
   /* */
-#endif
 };
 
 /* The one and only plugin attendant. */

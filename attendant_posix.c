@@ -204,22 +204,6 @@ struct cond {
 };
 
 
-/* For testing we keep a trace log. This is not a production log. If this is
- * enabled during production, tracing will stop when the array of poitns is
- * filled. */
-
-/* */
-#ifdef _DEBUG
-struct trace {
-  /* Each entry is a formatted string representing a trace point. */
-  char *points[256];
-  /* The current count of log entries. */
-  int count;
-  /* Gaurd for thread-safe traceing. */
-  pthread_mutex_t mutex;      
-};
-#endif
-
 /* The one and only process we watch. Static variables are gathered into this
  * structure so that when reading the code below, it is easy to see which are
  * static variables and which are local variables.*/
@@ -269,10 +253,6 @@ struct process {
    * refer to the pipes by name in code using the defines below that map the
    * pipe name to a pipe index. */
   attendant__pipe_t pipes[7][2];            
-  /* Tracing variables. See above. */
-#ifdef _DEBUG
-  struct trace trace;
-#endif
   /* &mdash; */
 };
 
@@ -352,26 +332,10 @@ static struct process process;
 /* ### Tracing */
 
 /* Format a logging message and write it to the log file. */
-#ifdef _DEBUG
-void trace(const char* function, const char* point) {
-  char buffer[64];
-  (void) pthread_mutex_lock(&process.trace.mutex);
-  if (process.trace.count < (sizeof(buffer) / sizeof(char)) - 1) {
-    sprintf(buffer, "[%s/%s]", function, point);
-    /* At times, I'll insert a `fprintf(stderr, "%s\n", buffer);` right here to
-     * see what's happening as it happens.
-     */
-    //fprintf(stderr, "%s\n", buffer);
-    process.trace.points[process.trace.count++] = strdup(buffer);
-  }
-  (void) pthread_mutex_unlock(&process.trace.mutex);
-}
-
-static char** tracepoints() {
-  return process.trace.points;
-}
+#ifdef _SAY
+extern void say(const char* format, ...);
 #else
-#define trace(function, breakpoint) ((void)0)
+#define say(...) ((void)0)
 #endif
 
 /* ### Initialization */
@@ -533,12 +497,7 @@ static int initalize(struct attendant__initializer *initializer)
   fcntl(process.pipes[PIPE_REAPER][0], F_SETFD, FD_CLOEXEC);
   fcntl(process.pipes[PIPE_REAPER][1], F_SETFD, FD_CLOEXEC);
 
-  /* Initialize tracing mutex. */
-#ifdef _DEBUG
-  (void) pthread_mutex_init(&process.trace.mutex, NULL);
-#endif
-
-  trace("initialize", "success");
+  say("[initialize/success]");
 
   /* TODO: What is success? */
   return 0;
@@ -727,7 +686,7 @@ static int start(const char* path, char const* argv[])
   err = pthread_create(&process.launcher, NULL, launch, NULL);
   FAIL(err != 0, START_CANNOT_SPAWN_THREAD, fail);
 
-  trace("start", "success");
+  say("[start/success]");
 
   return 0;
   /* TODO Do we signal_termination here? Yes. Sort this out. */
@@ -828,7 +787,11 @@ static void *launch(void *data)
   FAIL(process.argv[1] == NULL, LAUNCH_CANNOT_MALLOC, fail);
   sprintf(process.argv[1], "%d", spipe);
 
-  trace("launch", "fork");
+  for (i = 0; process.argv[i]; i++) {
+    say("argv[%d] = %s", i, process.argv[i]);
+  }
+
+  say("[launch/fork]");
 
   /* Let us fork.*/
   process.pid = fork();
@@ -959,6 +922,8 @@ static void *launch(void *data)
   /* */
   }
 
+  say("[launch/forked]");
+
   /* Now know that our status pipe is setup correctly, read an error if any. */
   HANDLE_EINTR(read(process.pipes[PIPE_RELAY][0], code, sizeof(code)), err);
 
@@ -988,14 +953,14 @@ static void *launch(void *data)
   /* Don't need these anymore. */
   free_argv();
 
-  trace("launch", "success");
+  say("[launch/success]");
 
   /* */
   return NULL;
 
 fail:
 
-  trace("launch", "failure");
+  say("[launch/failure]");
 
   if (process.pid > 0) {
     /* There is no logic in the relay that doesn't exit immediately. If it is
@@ -1043,6 +1008,8 @@ static void* reap(void *data)
   int status, err, fds[2], i, j, count;
   struct pollfd channels[4];
   char buffer[2048];
+
+  say("[reaper/start]");
 
   fds[0] = process.pipes[PIPE_STDOUT][0];
   fds[1] = process.pipes[PIPE_STDERR][0];
@@ -1106,7 +1073,7 @@ static void* reap(void *data)
       }
     }
 
-    trace("reap", "poll");
+    say("[reap/poll]");
 
     HANDLE_EINTR(poll(channels, count, timeout), err);
 
@@ -1136,7 +1103,7 @@ static void* reap(void *data)
 
     /* Did the monitored process terminate? */
     if (channels[CANARY].revents & POLLHUP) {
-      trace("reap", "hangup");
+      say("[reap/hangup]");
       hangup = 1;
     } else if (channels[CANARY].revents != 0) {
       set_error(REAPER_UNEXPECTED_CANARY_PIPE_EVENT);
@@ -1156,12 +1123,12 @@ static void* reap(void *data)
         }
 
       } else if (input[0] == -1) {
-        trace("reap", "shutdown");
+        say("[reap/shutdown]");
         shutdown = 1;
       } else if (input[0] > instance) {
         /* We will restart if we get an instance number higher than the static
          * instance number. If we get a `-1` we shutdown. */
-        trace("reap", "instance");
+        say("[reap/instance]");
         instance = input[0];
         /* */
       }
@@ -1211,7 +1178,7 @@ static void* reap(void *data)
   /* Repeat until the plugin server process exits. */
   } while (!hangup);
 
-  trace("reap", "hungup");
+  say("[reap/hungup]");
 
   /* TODO Log restart reason? No. We have no good reason. Or, hmm... Sure, why
    * not? */
@@ -1334,7 +1301,7 @@ static void signal_termination() {
      * never run again. */
     (void) pthread_mutex_lock(&process.mutex);
     if (process.instance == instance) {
-      trace("terminate", "shutdown");
+      say("[terminate/shutdown]");
       process.restarting = 0;
       process.shutdown = 1;
       (void) pthread_cond_signal(&process.cond.running);
@@ -1363,7 +1330,7 @@ static int ready() {
   ready = ! process.shutdown;
   pthread_mutex_unlock(&process.mutex);
 
-  trace("ready", "exit");
+  say("[ready/exit]");
 
   return ready;
 }
@@ -1505,7 +1472,7 @@ static int retry(int milliseconds) {
    * TK Already awake.
    */
   if (terminate) {
-    trace("retry", "terminate");
+    say("[retry/terminate]");
 
     message[0] = *instance;
     message[1] = milliseconds;
@@ -1522,13 +1489,13 @@ static int retry(int milliseconds) {
     /* Stash the instance number in thread local storage. */
     (void) pthread_setspecific(process.key, instance);
 
-    trace("retry", "again");
+    say("[retry/again]");
 
     /* Return true to indicate the IPC is running again. */
     return 1;
   }
 
-  trace("retry", "shutdown");
+  say("[retry/shutdown]");
 
   /* Return false if we've shutdown, indicating that a retry of IPC is
    * pointless. */
@@ -1588,14 +1555,14 @@ static int shutdown() {
    * for it to finish before we continue. */
   (void) pthread_mutex_lock(&process.mutex);
   while (process.restarting) {
-    trace("shutdown", "restarting");
+    say("[shutdown/restarting]");
     (void) pthread_cond_wait(&process.cond.running, &process.mutex);
   }
 
   /* Wait for the shutdown flag to set, otherwise a call to done is going to
    * report an invalid state. */
   while (! process.shutdown) {
-    trace("shutdown", "shutdown");
+    say("[shutdown/shutdown]");
     (void) pthread_cond_wait(&process.cond.shutdown, &process.mutex);
   }
 
@@ -1616,7 +1583,7 @@ static int shutdown() {
 
   (void) pthread_mutex_unlock(&process.mutex);
 
-  trace("shutdown", "exit");
+  say("[shutdown/exit]");
 
   return running;
 }
@@ -1644,7 +1611,7 @@ static int done(int timeout) {
     pthread_join(process.reaper, NULL);
   }
 
-  trace("done", "exit");
+  say("[done/exit]");
 
   return done;
 }
@@ -1670,12 +1637,12 @@ static int scram() {
      */
     HANDLE_EINTR(write(process.pipes[PIPE_REAPER][1], scram, sizeof(scram)), err);
 
-    trace("scram", "initiated");
+    say("[scram/initiated]");
 
     return 1;
   }
 
-  trace("scram", "shutdown");
+  say("[scram/shutdown]");
 
   return 0;
 }
@@ -1693,10 +1660,6 @@ static struct attendant__errors errors() {
 
 /* &#9824; &mdash; */
 static int destroy() {
-#ifdef _DEBUG
-  int i;
-#endif
-
   /* Release our mutex and signaling devices. */
   pthread_mutex_destroy(&process.mutex);
   pthread_cond_destroy(&process.cond.running);
@@ -1717,16 +1680,7 @@ static int destroy() {
   close(process.pipes[PIPE_REAPER][0]);
   close(process.pipes[PIPE_REAPER][1]);
 
-  /* Release the trace points, if any. */
-#ifdef _DEBUG
-  for (i = 0; process.trace.points[i]; i++) {
-    free(process.trace.points[i]);
-  }
-
-  (void) pthread_mutex_destroy(&process.trace.mutex);
-#endif
-
-  trace("scram", "success");
+  say("[scram/success]");
 
   /* Success. */
   return 0;
@@ -1744,9 +1698,6 @@ struct attendant attendant =
 , scram
 , errors
 , destroy
-#ifdef _DEBUG
-, tracepoints
-#endif
 };
 
 /* Had a realization while considering restart. I'd initially thought that I'd
