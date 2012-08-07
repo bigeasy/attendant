@@ -234,6 +234,8 @@ struct process {
   short running;
   /* The server is recovering from unexpected exit. */
   short restarting;
+  /* A shutdown has been requested. */
+  short shuttingdown;
   /* Shutdown is pending and exit is expected. */
   short shutdown;
   /* A count of the number of times that the server has started and restarted.
@@ -641,8 +643,22 @@ static void close_pipes() {
 /* &mdash; */
 static int start(const char* path, char const* argv[], int wait)
 {
-  int err, argc, i, running;
+  int err, argc, i, running, shuttingdown = 0;
   size_t size;
+
+  /* If we've been asked to wait, let's wait. We might get woken up by a
+   * call to shutdown, but the path forward now is to launch the process server,
+   * so we continue with startup, expecting that we'll shutdown the moment we
+   * startup. */
+  if (wait) {
+    pthread_mutex_lock(&process.mutex);
+    say("[start/chilling] %d", wait);
+    pthread_cond_waitforabit(&process.cond.chilling, &process.mutex, wait);
+    shuttingdown = process.shuttingdown;
+    pthread_mutex_unlock(&process.mutex);
+  }
+
+  FAIL(shuttingdown, START_SHUTTING_DOWN, fail);
 
   /* Assert that we're not being called while the one and only plugin server
    * process is already running. You're not calling the addendant functions in
@@ -691,17 +707,6 @@ static int start(const char* path, char const* argv[], int wait)
   }
   process.argv[argc + 4] = NULL;
 
-  /* If we've been asked to wait, let's wait. We might get woken up by a
-   * call to shutdown, but the path forward now is to launch the process server,
-   * so we continue with startup, expecting that we'll shutdown the moment we
-   * startup. */
-  if (wait) {
-    pthread_mutex_lock(&process.mutex);
-    say("[start/chilling] %d", wait);
-    pthread_cond_waitforabit(&process.cond.chilling, &process.mutex, wait);
-    pthread_mutex_unlock(&process.mutex);
-  }
-
   process.start_time = time(NULL);
 
   /* Create a launcher thread. */
@@ -711,7 +716,8 @@ static int start(const char* path, char const* argv[], int wait)
   say("[start/success]");
 
   return 0;
-  /* TODO Do we signal_termination here? Yes. Sort this out. */
+  /* Do we signal_termination here? No. Nothing has happened here that we could
+   * ever hope to recover from. */
 fail:
   free_argv();
   return -1;
@@ -1289,7 +1295,7 @@ static void* reap(void *data)
 
 /* */
 static void signal_termination() {
-  int instance;
+  int instance, shutdown, shuttingdown;
 
   /* Don't need the process identifier anymore. */
   process.pid = 0;
@@ -1299,9 +1305,16 @@ static void signal_termination() {
 
   /* Take note of whether we sould invoke the abend handler. Reset for an
    * orderly restart. Do not reset shutdown here, only stopped. */
-  process.restarting = !process.shutdown;
+  process.restarting = !process.shuttingdown;
   process.running = 0;
   instance = process.instance;
+
+  /* We are shutting down after a failed start, so we're never going to trigger
+   * the shutdown in the reaper thread. */
+  if (process.shuttingdown && !process.shutdown) {
+    process.shutdown = 1;
+    (void) pthread_cond_signal(&process.cond.shutdown);
+  }
 
   /* Signal any thread waiting on a running state change. */
   (void) pthread_cond_signal(&process.cond.running);
@@ -1309,8 +1322,11 @@ static void signal_termination() {
   /* Undip. */
   (void) pthread_mutex_unlock(&process.mutex);
 
+
   /* If we've decided to try a restart, call the abend handler. */
   if (process.restarting) {
+    say("[abend/restarting]");
+
     /* Call the starter to restarter the server process. */
     process.starter(1, time(NULL) - process.start_time);
 
@@ -1324,13 +1340,15 @@ static void signal_termination() {
      * never run again. */
     (void) pthread_mutex_lock(&process.mutex);
     if (process.instance == instance) {
-      say("[terminate/shutdown]");
+      say("[abend/shutdown]");
       process.restarting = 0;
       process.shutdown = 1;
       (void) pthread_cond_signal(&process.cond.running);
       (void) pthread_cond_signal(&process.cond.shutdown);
     }
     (void) pthread_mutex_unlock(&process.mutex);
+  } else {
+    say("[abend/exit]");
   }
 }
 
@@ -1577,6 +1595,8 @@ static int shutdown() {
    * restart. If we are in the middle of a server restart, we may as well wait
    * for it to finish before we continue. */
   (void) pthread_mutex_lock(&process.mutex);
+
+  process.shuttingdown = 1;
 
   /* If we're chilling before a restart, let's stop chilling. TODO: We could
    * have a count of millis to chill, which we set to zero, handling the case of

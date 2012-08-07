@@ -38,6 +38,7 @@
 #define START_CANNOT_DUP_STDERR_PIPE            122
 #define RELAY_PROGRAM_MISSING                   123
 #define START_CANNOT_SPAWN_THREAD               124
+#define START_SHUTTING_DOWN                    1240
 #define RELAY_PROGRAM_PATH_NOT_ABSOLUTE         125
 #define RELAY_CANNOT_OPEN_DEV_FD                126
 #define RELAY_CANNOT_EXEC                       127 
